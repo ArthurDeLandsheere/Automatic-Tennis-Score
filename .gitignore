@@ -209,6 +209,10 @@ __marimo__/
 # Videos and frames
 *.jpg
 *.mp4
+*.sbatch
+!dl_videos.sbatch
+!process_videos.sbatch
+!inference.sbatch
 
 .vscode
 inference_output

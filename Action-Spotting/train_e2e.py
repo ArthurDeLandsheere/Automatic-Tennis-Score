@@ -29,7 +29,7 @@ from util.score import compute_mAPs
 
 EPOCH_NUM_FRAMES = 500000
 
-BASE_NUM_WORKERS = 4
+BASE_NUM_WORKERS = 2
 
 BASE_NUM_VAL_EPOCHS = 20
 
@@ -292,7 +292,7 @@ class E2EModel(BaseRGBModel):
 
         self._model.eval()
         with torch.no_grad():
-            with torch.cuda.amp.autocast() if use_amp else nullcontext():
+            with torch.amp.autocast('cuda') if use_amp else nullcontext():
                 pred = self._model(seq)
             if isinstance(pred, tuple):
                 pred = pred[0]
@@ -315,7 +315,7 @@ def evaluate(model, dataset, split, classes, save_pred, calc_stats=True,
     batch_size = 1 if dataset.augment else INFERENCE_BATCH_SIZE
 
     for clip in tqdm(DataLoader(
-            dataset, num_workers=BASE_NUM_WORKERS * 2, pin_memory=True,
+            dataset, num_workers=BASE_NUM_WORKERS, pin_memory=True,
             batch_size=batch_size
     )):
         if batch_size > 1:
@@ -489,7 +489,7 @@ def store_config(file_path, args, num_epochs, classes):
 
 
 def get_num_train_workers(args):
-    n = BASE_NUM_WORKERS * 2
+    n = BASE_NUM_WORKERS
     # if args.gpu_parallel:
     #     n *= torch.cuda.device_count()
     return min(os.cpu_count(), n)

@@ -17,4 +17,4 @@ source $(conda info --base)/etc/profile.d/conda.sh
 conda activate /home/adelandsheere/anaconda3/envs/tennis
 
 # Run your Python script
-python test_e2e.py checkpoints/tennis_rny002gsm_gru_rgb data/tennis/frames -s single --save
+python test_e2e.py checkpoints/tennis_rny008gsm_gru_rgb data/tennis/frames -s single --save

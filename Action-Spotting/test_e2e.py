@@ -76,7 +76,8 @@ def main(model_dir, frame_dir, split, no_overlap, save, save_as, dataset):
         clip_len=config['clip_len'], modality=config['modality'],
         multi_gpu=config['gpu_parallel'])
     model.load(torch.load(os.path.join(
-        model_dir, 'checkpoint_{:03d}.pt'.format(best_epoch))))
+        model_dir, 'checkpoint_{:03d}.pt'.format(best_epoch)),
+        weights_only=False))
 
     split_path = os.path.join('data', dataset, '{}.json'.format(split))
     split_data = ActionSpotVideoDataset(
