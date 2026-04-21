@@ -2,7 +2,7 @@
 
 ## 1. Detection and Tracking
 
-> TO COMPLETE
+> TO COMPLETE: Add a folder for detection and tracking so that both tasks are well separated.
 
 ## 2. [Action Spotting](/Action-Spotting/)
 

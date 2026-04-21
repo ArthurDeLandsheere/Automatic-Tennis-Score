@@ -17,7 +17,7 @@ conda create -n tennis python=3.11
 conda activate tennis
 ```
 
-First, install the requirements:
+Install the requirements:
 ```bash
 pip install -r requirements.txt
 ```
@@ -52,7 +52,7 @@ This will process all the frames for all the videos and add them into the `data/
 
 ### 1.3 Checkpoints
 
-Create the `checkpoints` folder at the root of `Action-Spotting`. Go to `https://github.com/jhong93/e2e-spot-models/tree/main` and download the two models `tennis_rny002gsm_gru_rgb` and `tennis_rny008gsm_gru_rgb`. The `checkpoints` folder should now look like this:
+Create the `checkpoints` folder at the root of `Action-Spotting`. Go to https://github.com/jhong93/e2e-spot-models/tree/main and download the two models `tennis_rny002gsm_gru_rgb` and `tennis_rny008gsm_gru_rgb`. The `checkpoints` folder should now look like this:
 ```bash
 checkpoints
 ├── tennis_rny002gsm_gru_rgb
