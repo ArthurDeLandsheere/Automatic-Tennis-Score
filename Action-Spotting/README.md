@@ -101,3 +101,31 @@ This will use one of the models on the `single.json` split, which only contains 
 This will produce predictions in the `checkpoints` file.
 
 To visualize the predictions on the small clip, you can use the `visualize_predictions.ipynb` notebook. You have to **run it locally** so just download the notebook, the predictions, and the frames on your machine and run the notebook.
+
+## 3. Evaluation
+
+I ran inference on the whole test split with both pre-trained models (rny002 and rny008) and the results are quite good. You can see the detailed results in the `eval.log` file in the `outputs` folder but here is a summary.
+
+So basically I ran the two models, plus an ensemble model that averages the predictions of both models. Concretely, for every frame in every video, each model outputs a confidence score for each of the 6 event classes. The ensemble simply takes the average of those two score vectors, then picks the class with the highest averaged score as the prediction.
+
+I ran those tests with the following parameters:
+- *tolerance = [0,1,2,4]*: maximum allowed frame offset between a predicted event and the ground truth for it to count as a correct detection
+- *NMS = [0,1,2,3,5]*: window size (in frames) within which duplicate detections are suppressed, keeping only the most confident one (it's just like we saw in the theory)
+
+Since the results with tol=0 are really bad (logical since a model would then only be right if it predicts events at the exact frame they are happening), I did two tables, one in which I average the precision over all tolerances including 0 and the second in which I only average over tol=1,2,4. So in the tables below the numbers represent the Avg mAP over all videos in the test set and over all classes.
+
+### Including tol=0
+| Model    | NMS=0     | NMS=1 | NMS=2 | NMS=3 | NMS=5 |
+|----------|-----------|-------|-------|-------|-------|
+| rny002   | **86.65** | 83.98 | 83.89 | 83.83 | 83.78 |
+| rny008   | **86.55** | 84.02 | 83.90 | 83.85 | 83.80 |
+| ensemble | **87.18** | 84.56 | 84.47 | 84.43 | 84.41 |
+
+### Excluding tol=0
+| Model    | NMS=0 | NMS=1     | NMS=2 | NMS=3 | NMS=5 |
+|----------|-------|-----------|-------|-------|-------|
+| rny002   | **96.29** | 95.99 | 95.90 | 95.83 | 95.76 |
+| rny008   | 96.97 | **97.07** | 96.94 | 96.88 | 96.82 |
+| ensemble | 96.63 | **97.11** | 97.02 | 96.98 | 96.95 |
+
+So of course the results are better when we average over tol=1,2,4 and exclude tol=0 since the results with tol=0 are bad. The rny008 and ensemble perform the best when excluding tol=0 with NMS=1.

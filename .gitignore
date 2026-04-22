@@ -213,6 +213,7 @@ __marimo__/
 !dl_videos.sbatch
 !process_videos.sbatch
 !inference.sbatch
+!eval.log
 
 .vscode
 inference_output

@@ -1,0 +1,459 @@
+
+======================================================================
+  Model: tennis_rny002gsm_gru_rgb | NMS window: 0
+======================================================================
+$ python eval.py checkpoints/tennis_rny002gsm_gru_rgb -s test --nms_window 0 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+======================================================================
+  Model: tennis_rny002gsm_gru_rgb | NMS window: 1
+======================================================================
+$ python eval.py checkpoints/tennis_rny002gsm_gru_rgb -s test --nms_window 1 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.43  93.10  95.43  95.76
+far_court_serve    58.96  98.49  99.30  99.30
+far_court_swing    29.40  90.37  97.82  98.64
+near_court_bounce  43.89  89.74  95.51  96.36
+near_court_serve   64.02  98.12  98.51  98.51
+near_court_swing   29.78  97.30  98.71  99.00
+mAP                45.91  94.52  97.55  97.93
+Avg mAP (across tolerances): 83.98
+
+======================================================================
+  Model: tennis_rny002gsm_gru_rgb | NMS window: 2
+======================================================================
+$ python eval.py checkpoints/tennis_rny002gsm_gru_rgb -s test --nms_window 2 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.38  92.98  95.34  95.77
+far_court_serve    58.96  98.49  99.30  99.30
+far_court_swing    29.28  89.84  97.57  98.63
+near_court_bounce  43.68  89.33  95.39  96.39
+near_court_serve   64.02  98.12  98.51  98.51
+near_court_swing   29.77  97.20  98.68  99.01
+mAP                45.85  94.32  97.46  97.93
+Avg mAP (across tolerances): 83.89
+
+======================================================================
+  Model: tennis_rny002gsm_gru_rgb | NMS window: 3
+======================================================================
+$ python eval.py checkpoints/tennis_rny002gsm_gru_rgb -s test --nms_window 3 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.36  92.89  95.22  95.70
+far_court_serve    58.96  98.49  99.30  99.30
+far_court_swing    29.19  89.36  97.27  98.61
+near_court_bounce  43.68  89.22  95.36  96.39
+near_court_serve   64.02  98.12  98.51  98.51
+near_court_swing   29.75  97.11  98.64  99.02
+mAP                45.83  94.20  97.38  97.92
+Avg mAP (across tolerances): 83.83
+
+======================================================================
+  Model: tennis_rny002gsm_gru_rgb | NMS window: 5
+======================================================================
+$ python eval.py checkpoints/tennis_rny002gsm_gru_rgb -s test --nms_window 5 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   63.22  93.68  94.64  94.80
+far_court_serve    70.78  98.52  99.16  99.16
+far_court_swing    46.47  91.48  94.91  95.41
+near_court_bounce  52.29  92.08  95.13  95.48
+near_court_serve   71.68  98.39  98.43  98.43
+near_court_swing   42.07  97.51  97.95  97.99
+mAP                57.75  95.28  96.70  96.88
+Avg mAP (across tolerances): 86.65
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.35  92.89  95.20  95.71
+far_court_serve    58.96  98.49  99.30  99.30
+far_court_swing    29.14  89.10  96.89  98.48
+near_court_bounce  43.65  89.13  95.20  96.28
+near_court_serve   64.02  98.12  98.51  98.51
+near_court_swing   29.75  97.09  98.59  99.02
+mAP                45.81  94.14  97.28  97.88
+Avg mAP (across tolerances): 83.78
+
+======================================================================
+  Model: tennis_rny008gsm_gru_rgb | NMS window: 0
+======================================================================
+$ python eval.py checkpoints/tennis_rny008gsm_gru_rgb -s test --nms_window 0 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+======================================================================
+  Model: tennis_rny008gsm_gru_rgb | NMS window: 1
+======================================================================
+$ python eval.py checkpoints/tennis_rny008gsm_gru_rgb -s test --nms_window 1 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.88  93.30  95.72  96.00
+far_court_serve    51.67  98.31  99.24  99.38
+far_court_swing    29.44  93.21  98.43  98.79
+near_court_bounce  44.73  90.81  95.71  96.40
+near_court_serve   62.96  98.95  99.08  99.08
+near_court_swing   30.58  97.34  98.54  98.87
+mAP                44.88  95.32  97.79  98.09
+Avg mAP (across tolerances): 84.02
+
+======================================================================
+  Model: tennis_rny008gsm_gru_rgb | NMS window: 2
+======================================================================
+$ python eval.py checkpoints/tennis_rny008gsm_gru_rgb -s test --nms_window 2 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.82  93.12  95.60  96.02
+far_court_serve    51.67  98.31  99.24  99.38
+far_court_swing    29.18  92.31  98.15  98.85
+near_court_bounce  44.50  90.34  95.57  96.34
+near_court_serve   62.96  98.95  99.08  99.08
+near_court_swing   30.54  97.20  98.50  98.87
+mAP                44.78  95.04  97.69  98.09
+Avg mAP (across tolerances): 83.90
+
+======================================================================
+  Model: tennis_rny008gsm_gru_rgb | NMS window: 3
+======================================================================
+$ python eval.py checkpoints/tennis_rny008gsm_gru_rgb -s test --nms_window 3 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.75  93.02  95.51  95.99
+far_court_serve    51.67  98.31  99.24  99.38
+far_court_swing    29.12  92.01  97.97  98.83
+near_court_bounce  44.47  90.21  95.53  96.36
+near_court_serve   62.96  98.95  99.08  99.08
+near_court_swing   30.50  97.09  98.39  98.88
+mAP                44.75  94.93  97.62  98.09
+Avg mAP (across tolerances): 83.85
+
+======================================================================
+  Model: tennis_rny008gsm_gru_rgb | NMS window: 5
+======================================================================
+$ python eval.py checkpoints/tennis_rny008gsm_gru_rgb -s test --nms_window 5 -t 0 1 2 4
+Inferred dataset: tennis
+Evaluating on: checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.recall.json.gz
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   61.80  94.25  95.19  95.30
+far_court_serve    61.66  98.70  99.31  99.33
+far_court_swing    43.65  94.23  97.01  97.32
+near_court_bounce  51.86  92.59  95.54  95.86
+near_court_serve   71.10  98.98  98.98  98.98
+near_court_swing   41.66  97.68  98.07  98.13
+mAP                55.29  96.07  97.35  97.49
+Avg mAP (across tolerances): 86.55
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   49.74  92.99  95.48  95.99
+far_court_serve    51.67  98.31  99.24  99.38
+far_court_swing    29.05  91.78  97.66  98.73
+near_court_bounce  44.46  90.16  95.46  96.32
+near_court_serve   62.96  98.95  99.08  99.08
+near_court_swing   30.50  97.05  98.34  98.86
+mAP                44.73  94.87  97.54  98.06
+Avg mAP (across tolerances): 83.80
+
+======================================================================
+  Ensemble (rny002 + rny008) | NMS window: 0
+======================================================================
+$ python eval_ensemble.py tennis checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.score.json.gz checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.score.json.gz -s test --nms_window 0
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+======================================================================
+  Ensemble (rny002 + rny008) | NMS window: 1
+======================================================================
+$ python eval_ensemble.py tennis checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.score.json.gz checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.score.json.gz -s test --nms_window 1
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   51.15  93.71  95.56  95.89
+far_court_serve    57.98  98.51  99.31  99.31
+far_court_swing    31.42  93.88  98.77  98.98
+near_court_bounce  45.31  90.56  95.75  96.46
+near_court_serve   64.61  98.40  98.78  98.78
+near_court_swing   30.81  97.64  98.76  99.00
+mAP                46.88  95.45  97.82  98.07
+Avg mAP (across tolerances): 84.56
+
+======================================================================
+  Ensemble (rny002 + rny008) | NMS window: 2
+======================================================================
+$ python eval_ensemble.py tennis checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.score.json.gz checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.score.json.gz -s test --nms_window 2
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   51.11  93.62  95.56  95.90
+far_court_serve    57.98  98.51  99.31  99.31
+far_court_swing    31.20  93.26  98.55  99.03
+near_court_bounce  45.15  90.18  95.55  96.42
+near_court_serve   64.61  98.40  98.78  98.78
+near_court_swing   30.80  97.60  98.76  99.01
+mAP                46.81  95.26  97.75  98.07
+Avg mAP (across tolerances): 84.47
+
+======================================================================
+  Ensemble (rny002 + rny008) | NMS window: 3
+======================================================================
+$ python eval_ensemble.py tennis checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.score.json.gz checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.score.json.gz -s test --nms_window 3
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   51.09  93.53  95.52  95.90
+far_court_serve    57.98  98.51  99.31  99.31
+far_court_swing    31.11  92.98  98.33  99.02
+near_court_bounce  45.14  90.10  95.50  96.40
+near_court_serve   64.61  98.40  98.78  98.78
+near_court_swing   30.79  97.56  98.74  99.01
+mAP                46.79  95.18  97.70  98.07
+Avg mAP (across tolerances): 84.43
+
+======================================================================
+  Ensemble (rny002 + rny008) | NMS window: 5
+======================================================================
+$ python eval_ensemble.py tennis checkpoints/tennis_rny002gsm_gru_rgb/pred-test.40.score.json.gz checkpoints/tennis_rny008gsm_gru_rgb/pred-test.41.score.json.gz -s test --nms_window 5
+
+=== Results on test (w/o NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   65.01  94.02  94.81  94.92
+far_court_serve    69.12  98.47  99.05  99.05
+far_court_swing    48.47  93.76  95.97  96.14
+near_court_bounce  53.70  92.85  95.34  95.65
+near_court_serve   73.22  98.62  98.64  98.64
+near_court_swing   43.55  97.57  97.89  97.93
+mAP                58.85  95.88  96.95  97.06
+Avg mAP (across tolerances): 87.18
+
+=== Results on test (w/ NMS) ===
+AP @ tol               0      1      2      4
+-----------------  -----  -----  -----  -----
+far_court_bounce   51.09  93.51  95.46  95.87
+far_court_serve    57.98  98.51  99.31  99.31
+far_court_swing    31.10  92.88  98.15  98.99
+near_court_bounce  45.14  90.09  95.48  96.40
+near_court_serve   64.61  98.40  98.78  98.78
+near_court_swing   30.79  97.52  98.70  99.02
+mAP                46.79  95.15  97.65  98.06
+Avg mAP (across tolerances): 84.41
+
+======================================================================
+  All evaluations complete.
+======================================================================
