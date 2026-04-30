@@ -1,0 +1,18 @@
+# Tennis tracking — Python deps
+#
+# Note on torch: install separately with the right CUDA wheel for your cluster:
+#   pip install torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+# (same line your action-spotting README uses)
+
+ultralytics>=8.2.0          # YOLOv8 + ByteTrack
+lapx>=0.5.5                 # IMPORTANT: NOT `lap`. The legacy `lap` wheel
+                            # pins numpy and breaks ultralytics' tracker.
+opencv-python>=4.8.0
+numpy>=1.24
+matplotlib>=3.7
+pandas>=2.0
+tqdm>=4.65
+gdown>=5.0                  # for downloading TrackNet weights from Drive
+
+# Court detector — kept on numpy now, sympy no longer required
+# motmetrics                 # uncomment if you implement player MOTA
