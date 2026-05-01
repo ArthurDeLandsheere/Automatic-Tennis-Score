@@ -5,7 +5,7 @@
 #SBATCH --time=04:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem-per-cpu=4G
 
 # ─── Adjust these for your cluster ────────────────────────────────────────
 # (the partition/account flags above are intentionally omitted — copy whatever
@@ -13,11 +13,11 @@
 
 set -euo pipefail
 
-# Activate the same conda env you use for action-spotting
-source ~/miniconda3/etc/profile.d/conda.sh   # or /opt/conda/...
-conda activate tennis
+# Run from wherever you ran sbatch (your Tracking/ folder)
+cd "$SLURM_SUBMIT_DIR"
 
-cd "$(dirname "$0")/.."   # → Tracking/
+# Use the env's python directly — avoids all conda activation pitfalls on SLURM
+PYTHON=/home/edlbb/anaconda3/envs/tennis/bin/python
 
 mkdir -p outputs/tracks outputs/logs
 

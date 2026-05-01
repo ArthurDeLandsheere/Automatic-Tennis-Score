@@ -209,7 +209,7 @@ __marimo__/
 # Videos and frames
 *.jpg
 *.mp4
-*.sbatch
+# *.sbatch
 !dl_videos.sbatch
 !process_videos.sbatch
 !inference.sbatch
@@ -219,3 +219,4 @@ __marimo__/
 inference_output
 *.pt
 checkpoints/
+.gitignore
