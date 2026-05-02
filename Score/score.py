@@ -66,33 +66,27 @@ class TennisScore:
     """
     Tennis score tracker.
     """
-    def __init__(self, server_side=FAR,
-                        points=field(default_factory=lambda: {FAR: 0, NEAR: 0}),
-                        deuce = False,
-                        advantage_to = None,
-                        games=field(default_factory=lambda: {FAR: 0, NEAR: 0}),
-                        sets=field(default_factory=lambda: {FAR: 0, NEAR: 0}),
-                        in_tiebreak=False,
-                        serve_number=1,
-                        point_start_frame = 0
-                ):
+    def __init__(self, server_side=FAR):
         self.server_side = server_side
 
         # Different possibilities for the points in a game
-        self.points = points
-        self.deuce = deuce       # Deuce is true for 40-40 and advantages
-        self.advantage_to = advantage_to
+        self.points = {FAR: 0, NEAR: 0}
+        self.deuce = False # Deuce is true for 40-40 and advantages
+        self.advantage_to = None
 
         # Different possibilities for games and sets
-        self.games = games
-        self.sets = sets
-        self.in_tiebreak = in_tiebreak
-
+        self.games = {FAR: 0, NEAR: 0}
+        self.sets = {FAR: 0, NEAR: 0}
+        self.in_tiebreak = False
+        
         # To know if first or second serve
-        self.serve_number = serve_number
+        self.serve_number = 1
 
         # time of the start of a point
-        self.point_start_frame = point_start_frame
+        self.point_start_frame = 0
+        self.point_log = []
+        self.game_log = []
+        self.set_log = []
 
     def other(self, curr_side: str) -> str:
         """
@@ -144,6 +138,16 @@ class TennisScore:
         else:
             self.regular_point(winner)
 
+        self.point_log.append({
+            'start_frame': self.point_start_frame,
+            'end_frame': frame,
+            'winner_side': winner,
+            'server_side': self.server_side,
+            'serve_number': self.serve_number,
+            'double_fault': double_fault,
+            'score_after': {'points': dict(self.points), 'games': dict(self.games), 'sets': dict(self.sets)},
+        })
+
 
     def regular_point(self, winner: str) -> None:
         """
@@ -190,26 +194,31 @@ class TennisScore:
         self.deuce = False
         self.advantage_to = None
         self.games[winner] += 1
-        loser = self.other(self, winner)
+        loser = self.other(winner)
         winner_games, loser_games = self.games[winner], self.games[loser]
-        # Becomes tiebreak if both player hit the max_number of games together
+
         if winner_games == GAMES_TO_WIN and loser_games == GAMES_TO_WIN:
             self.in_tiebreak = True
-            return
-        # Wins the set (either 6-something or 7-5)
-        if winner_games >= GAMES_TO_WIN and (winner_games - loser_games) >= 2:
+        elif winner_games >= GAMES_TO_WIN and (winner_games - loser_games) >= 2:
             self.in_tiebreak = False
             self.set_won(winner)
 
+        self.game_log.append({
+            'winner_side': winner,
+            'games_after': dict(self.games),
+            'sets_after': dict(self.sets),
+        })
+
 
     def set_won(self, winner: str):
-        """
-        Updates the state when a set is won
-        """
+        games_before_reset = dict(self.games)
         self.sets[winner] += 1
         self.games = {FAR: 0, NEAR: 0}
 
-        # if self.sets[winner] >= SETS_TO_WIN:
+        self.set_log.append({
+            'winner_side': winner,
+            'games': {'far': games_before_reset[FAR], 'near': games_before_reset[NEAR]},
+        })
 
 
     def match_over(self) -> bool:
@@ -324,7 +333,7 @@ class ScoreComputer:
     def reset_rally_state(self):
         self.rally_ongoing = False
         self.last_swing_side = None
-        self.served_this_point = False
+        self.is_serving = False
 
     def other(self, curr_side: str):
         """

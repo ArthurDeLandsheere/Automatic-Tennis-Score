@@ -54,6 +54,12 @@ def track_players(
                 })
         tracks_per_frame.append(frame_dets)
 
+    # Padding in the case of length mismatch
+    if n_frames_total is not None and len(tracks_per_frame) < n_frames_total:
+        missing = n_frames_total - len(tracks_per_frame)
+        print(f"[warn] YOLO generator stopped {missing} frames early — padding with empty frames")
+        tracks_per_frame.extend([[] for _ in range(missing)])
+
     return tracks_per_frame
 
 

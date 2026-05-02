@@ -1,8 +1,15 @@
 # Automatic-Tennis-Score
 
-## 1. Detection and Tracking
+## 1. [Detection and Tracking](/Tracking/)
 
-> TO COMPLETE: Add a folder for detection and tracking so that both tasks are well separated.
+This folder contains the **tracking component** of our automatic tennis scoring pipeline:
+
+1. **Player detection & tracking** — YOLOv8m (pretrained on COCO) + ByteTrack
+2. **Court-line detection** — homography-based detector (Hough lines + best-fit reference)
+3. **Ball tracking** — TrackNet V1 ([yastrebksv/TrackNet](https://github.com/yastrebksv/TrackNet)) wrapped in a batched sliding-window inference loop (fixes the OOM in the reference repo)
+
+Look at the [README](/Tracking/README.md) file in the Action Spotting folder for details about the setup.
+
 
 ## 2. [Action Spotting](/Action-Spotting/)
 

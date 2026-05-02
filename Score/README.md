@@ -24,29 +24,7 @@ No extra dependencies are required for the scaffolding. If your score logic need
 pip install -r requirements.txt
 ```
 
-## 2. Structure
-
-```
-Score
-├── data
-│   └── tennis
-│       ├── tracks          # symlink or copy of Tracking/outputs/tracks/
-│       └── predictions     # symlink or copy of Action-Spotting predictions
-├── jobs
-│   └── score.sbatch
-├── outputs
-│   ├── scores              # one <name>_score.json per video
-│   └── logs
-├── scripts
-│   └── score.py            # CLI entry point (batch + single-video)
-├── src
-│   ├── io_utils.py         # loading, merging, saving — already done
-│   └── score.py            # ScoreComputer — YOUR code goes here
-├── requirements.txt
-└── README.md
-```
-
-## 3. What is already done
+## 2. What is already done
 
 ### `src/io_utils.py`
 - `load_tracking(path)` — loads a tracking JSON, logs basic metadata
@@ -78,7 +56,7 @@ Or on the cluster:
 sbatch jobs/score.sbatch
 ```
 
-## 4. What you need to implement
+## 3. What you need to implement
 
 Open `src/score.py`. It contains the `ScoreComputer` class with two stubbed methods:
 
@@ -119,7 +97,7 @@ Suggested output schema:
 }
 ```
 
-## 5. Useful context
+## 4. Useful context
 
 - `self.fps` — frames per second (use to convert frame offsets to seconds)
 - `self.main_player_ids` — `[id_top, id_bottom]` persistent player IDs
@@ -133,3 +111,57 @@ Check `Action-Spotting/data/tennis/class.txt` for the exact labels. Typical ones
 
 ### Detection threshold
 The default merge threshold is `0.5` (set in `io_utils.merge_frames`). You can lower it for noisier events or raise it for precision. You can also bypass `frame["events"]` and work directly from `frame["scores"]` for more nuanced logic.
+
+
+## 5. Pipeline (`pipeline.py`)
+
+The file `pipeline.py` implements an end-to-end process on a single video. It does the following:
+1. Exracts `jpg` frames from the raw `mp4` video.
+2. Runs action spotting on the extracted frames.
+3. Runs tracking on a resized version of the video to match the input size of the tracking components.
+4. Computes the score based on the outputs of action spotting and tracking by using the `score.py` file.
+
+**Important things**:
+- The input video must be `1920x1080` to match the input of action spotting. It will be automatically resized to `1280x720` for the tracking part.
+- Running the full `pipeline.py` file will produce five outputs in `outputs/predictions/<video_name>`: 3 for the action spotting, 1 for the tracking, and 1 for the final score.
+- The input video must be in `mp4` format and placed in `Score/data/tennis/videos`.
+
+To run the file, you simply have to specify the name of the video, and the action spotting model to use. **Run the file from the `Score` folder**. For example:
+```bash
+python pipeline.py \
+      --video_name test_clip.mp4 \
+      --as_model_name tennis_rny008gsm_gru_rgb
+```
+
+Here is what the `Score` folder looks like on my machine after I ran `pipeline.py` on `test_clip.mp4`:
+```bash
+Score
+├── data
+│   └── tennis
+│       ├── frames
+│       │   └── test_clip
+|       |       ├── 000000.jpg
+|       |       ├── 000001.jpg
+|       |       └── ...
+│       └── videos
+│           └── test_clip.mp4
+├── jobs
+│   ├── pipeline.sbatch
+│   └── score.sbatch
+├── outputs
+│   ├── logs
+│   │   └── pipeline.log
+│   └── predictions
+│       └── test_clip
+│           ├── action_spotting.json
+│           ├── action_spotting.recall.json.gz
+│           ├── action_spotting.score.json.gz
+│           ├── score.json
+│           └── tracking.json
+├── scripts
+|   └── score.py
+├── io_utils.py
+├── pipeline.py
+├── score.py
+└── README.md
+```

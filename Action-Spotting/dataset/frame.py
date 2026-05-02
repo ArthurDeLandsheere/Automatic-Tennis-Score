@@ -491,6 +491,42 @@ class ActionSpotVideoDataset(Dataset):
                 self._clips.append((l['video'], i))
             assert has_clip, l
 
+    @classmethod
+    def from_video_info(cls, classes, video_name, frame_dir, modality, clip_len,
+                        num_frames, fps, overlap_len=0, crop_dim=None, stride=1,
+                        pad_len=DEFAULT_PAD_LEN):
+        """Construct dataset from explicit video metadata, without a JSON file."""
+        instance = cls.__new__(cls)
+        instance._src_file = None
+        instance._labels = [{
+            'video': video_name,
+            'num_frames': num_frames,
+            'fps': fps,
+            'events': [],
+        }]
+        instance._class_dict = classes
+        instance._video_idxs = {video_name: 0}
+        instance._clip_len = clip_len
+        instance._stride = stride
+        instance._flip = False
+        instance._multi_crop = False
+
+        crop_transform, img_transform = _get_img_transforms(
+            is_eval=True, crop_dim=crop_dim, modality=modality,
+            same_transform=True, multi_crop=False)
+        instance._frame_reader = FrameReader(
+            frame_dir, modality, crop_transform, img_transform, False)
+
+        instance._clips = []
+        for i in range(
+            -pad_len * stride,
+            max(0, num_frames - overlap_len * stride),
+            (clip_len - overlap_len) * stride
+        ):
+            instance._clips.append((video_name, i))
+
+        return instance
+
     def __len__(self):
         return len(self._clips)
 

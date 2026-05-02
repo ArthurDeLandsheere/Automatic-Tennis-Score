@@ -16,9 +16,12 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('model_dir', help='Path to the model dir')
     parser.add_argument('frame_dir', help='Path to the frame dir')
-    parser.add_argument('-s', '--split',
-                        choices=['train', 'val', 'test', 'challenge', 'single'],
-                        required=True)
+
+    parser.add_argument('-s', '--split', choices=['train', 'val', 'test', 'challenge', 'single'])
+    parser.add_argument('--single_video', help='Video name (no extension) to run inference on directly')
+    parser.add_argument('--num_frames', type=int)
+    parser.add_argument('--fps', type=float)
+
     parser.add_argument('--no_overlap', action='store_true')
 
     save = parser.add_mutually_exclusive_group()
@@ -50,7 +53,8 @@ def get_last_epoch(model_dir):
     return last_epoch
 
 
-def main(model_dir, frame_dir, split, no_overlap, save, save_as, dataset):
+def main(model_dir, frame_dir, split, no_overlap, save, save_as, dataset,
+            single_video, num_frames, fps):
     config_path = os.path.join(model_dir, 'config.json')
     with open(config_path) as fp:
         print(fp.read())
@@ -79,11 +83,21 @@ def main(model_dir, frame_dir, split, no_overlap, save, save_as, dataset):
         model_dir, 'checkpoint_{:03d}.pt'.format(best_epoch)),
         weights_only=False))
 
-    split_path = os.path.join('data', dataset, '{}.json'.format(split))
-    split_data = ActionSpotVideoDataset(
-        classes, split_path, frame_dir, config['modality'], config['clip_len'],
-        overlap_len=0 if no_overlap else config['clip_len'] // 2,
-        crop_dim=config['crop_dim'])
+    if single_video is not None:
+        assert num_frames and fps, '--num_frames and --fps required with --single_video'
+        split_data = ActionSpotVideoDataset.from_video_info(
+            classes, single_video, frame_dir, config['modality'], config['clip_len'],
+            num_frames=num_frames, fps=fps,
+            overlap_len=0 if no_overlap else config['clip_len'] // 2,
+            crop_dim=config['crop_dim'])
+        split = single_video  # used for labeling output only
+    else:
+        assert split is not None, 'Either --split or --single_video must be provided'
+        split_path = os.path.join('data', dataset, '{}.json'.format(split))
+        split_data = ActionSpotVideoDataset(
+            classes, split_path, frame_dir, config['modality'], config['clip_len'],
+            overlap_len=0 if no_overlap else config['clip_len'] // 2,
+            crop_dim=config['crop_dim'])
 
     pred_file = None
     if save_as is not None:

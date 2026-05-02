@@ -27,7 +27,11 @@ DEFAULT_MAX_GAP_TO_INTERP = 6
 def load_ball_model(weights_path: str, device: str = "cuda") -> BallTrackerNet:
     """Load BallTrackerNet weights. Tolerant to a few common state_dict layouts."""
     model = BallTrackerNet()
-    state = torch.load(weights_path, map_location=device)
+    try:
+        state = torch.load(weights_path, map_location=device, weights_only=True)
+    except Exception:
+        state = torch.load(weights_path, map_location=device, weights_only=False)
+
     if isinstance(state, dict) and "model_state" in state:
         state = state["model_state"]
     elif isinstance(state, dict) and "state_dict" in state:

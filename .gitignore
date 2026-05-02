@@ -206,10 +206,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+.gitignore
+
 # Videos and frames
 *.jpg
 *.mp4
-# *.sbatch
+*.sbatch
 !dl_videos.sbatch
 !process_videos.sbatch
 !inference.sbatch
@@ -219,4 +221,5 @@ __marimo__/
 inference_output
 *.pt
 checkpoints/
-.gitignore
+predictions/
+outputs/

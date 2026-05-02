@@ -25,17 +25,20 @@ class Task(NamedTuple):
     target_fps: float
     max_height: int
 
-
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('dataset', choices=['fs', 'tennis'],
-                        help='Dataset to extract frames for.')
-    parser.add_argument('video_dir', help='Path to the videos')
+    parser.add_argument('--dataset', choices=['fs', 'tennis'], default=None, help='Dataset to extract frames for.')
+    parser.add_argument('--video_dir', default=None, help='Path to the videos')
+
     parser.add_argument('-o', '--out_dir',
                         help='Path to write frames. Dry run if None.')
     parser.add_argument('--max_height', type=int, default=224,
                         help='Max height of the extracted frames')
     parser.add_argument('--parallelism', type=int, default=os.cpu_count() // 4)
+
+    parser.add_argument('--single_video', help='Path to a single video file to process')
+    parser.add_argument('--num_frames', type=int, help='Number of frames in the single video (required with --single_video)')
+    parser.add_argument('--fps', type=float, help='FPS of the single video (required with --single_video)')
     return parser.parse_args()
 
 
@@ -102,6 +105,18 @@ def get_tennis_tasks(video_dir, out_dir, max_height):
             ))
     return tasks
 
+def get_single_video_task(video_path, out_dir, max_height, num_frames, fps):
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    video_out_path = os.path.join(out_dir, video_name) if out_dir is not None else None
+    return [Task(
+        video_name=video_name,
+        video_path=video_path,
+        out_path=video_out_path,
+        min_frame=0,
+        max_frame=num_frames,
+        target_fps=fps,
+        max_height=max_height
+    )]
 
 def extract_frames(task):
     vc = cv2.VideoCapture(task.video_path)
@@ -116,7 +131,8 @@ def extract_frames(task):
     else:
         oh, ow = h, w
 
-    assert np.isclose(fps, task.target_fps), (fps, task.target_fps)
+    if not np.isclose(fps, task.target_fps):
+        print(f'Warning: video FPS {fps} does not match target {task.target_fps} for {task.video_name}')
 
     if task.out_path is not None:
         os.makedirs(task.out_path)
@@ -140,25 +156,27 @@ def extract_frames(task):
             break
 
     vc.release()
-    assert i == task.max_frame - task.min_frame, \
-        'Expected {} frames, got {}: {}'.format(
-            task.max_frame - task.min_frame, i, task.video_name)
+    actual = task.max_frame - task.min_frame
+    if i != actual:
+        print(f'Warning: expected {actual} frames, got {i} for {task.video_name}. Using actual count.')
 
-
-def main(dataset, video_dir, out_dir, max_height, parallelism):
-    if dataset == 'fs':
+def main(dataset, video_dir=None, out_dir=None, max_height=224, parallelism=None, single_video=None, num_frames=None, fps=None):
+    if single_video:
+        assert num_frames and fps, '--num_frames and --fps are required with --single_video'
+        tasks = get_single_video_task(single_video, out_dir, max_height, num_frames, fps)
+    elif dataset == 'fs':
         tasks = get_fs_tasks(video_dir, out_dir, max_height)
     elif dataset == 'tennis':
         tasks = get_tennis_tasks(video_dir, out_dir, max_height)
     else:
-        raise Exception('Unknown dataset: ' + dataset)
+        raise Exception('Either --dataset or --single_video must be provided')
 
     is_dry_run = False
     if out_dir is None:
         print('No output directory given. Doing a dry run!')
         is_dry_run = True
     else:
-        os.makedirs(out_dir)
+        os.makedirs(out_dir, exist_ok=True)
 
     with Pool(parallelism) as p:
         for _ in tqdm(

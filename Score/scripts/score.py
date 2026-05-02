@@ -26,8 +26,8 @@ from pathlib import Path
 # Make sure the repo root is on sys.path when invoked with python -m
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.io_utils import load_tracking, load_predictions, merge_frames, save_score_output
-from src.score import ScoreComputer
+from io_utils import load_tracking, load_predictions, merge_frames, save_score_output
+from score import ScoreComputer
 
 logging.basicConfig(
     level=logging.INFO,
