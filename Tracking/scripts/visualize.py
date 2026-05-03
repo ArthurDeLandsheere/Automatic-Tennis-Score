@@ -45,10 +45,11 @@ def main() -> None:
         (f["ball"]["x"], f["ball"]["y"]) if f["ball"] is not None else None
         for f in tracks["frames"]
     ]
-    court_polygon = (
-        np.array(tracks["court_polygon"], dtype=np.int32)
-        if tracks.get("court_polygon") is not None else None
-    )
+    court_polygons = [
+        np.array(f["court_polygon"], dtype=np.int32)
+        if f.get("court_polygon") is not None else None
+        for f in tracks["frames"]
+    ]
 
     # 1) Sample frames grid
     show_sample_frames(
@@ -69,7 +70,7 @@ def main() -> None:
             out_path=str(out_dir / "annotated.mp4"),
             labeled_players=labeled_players,
             ball_positions=ball_positions,
-            court_polygon=court_polygon,
+            court_polygons=court_polygons,
         )
 
     print(f"\nDone. Outputs in {out_dir}/")

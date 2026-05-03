@@ -62,6 +62,16 @@ def _sort_intersection_points(pts):
     bottom = sorted(y_sorted[2:], key=lambda p: p[0])
     return top + bottom
 
+def frame_has_court(frame: np.ndarray, threshold: int = 3000) -> bool:
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Use HSV white mask instead of raw brightness — more robust to skin/clothing
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    white_mask = cv2.inRange(hsv, (0, 0, 200), (180, 40, 255))
+    # Require long horizontal runs (court lines are wide-frame features)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (80, 1))
+    lines = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel)
+    return int(np.sum(lines > 0)) > threshold
+
 
 class CourtReference:
     """
@@ -337,3 +347,210 @@ class CourtDetector:
         correct = court * gray
         wrong = court - correct
         return np.sum(correct) - 0.5 * np.sum(wrong)
+
+# ------------------------------------------------------------------
+# Written by Claude
+# ------------------------------------------------------------------
+class CourtTracker:
+    """
+    Tracks the court polygon across video frames.
+
+    Strategy:
+      1. Scan frames from the start until frame_has_court() is True,
+         then run CourtDetector for the initial polygon.
+      2. For each subsequent frame, estimate camera motion via sparse
+         optical flow and warp the court homography forward.
+      3. Periodically revalidate the warped homography using the detector's
+         scoring function. If score drops below threshold, attempt re-detection.
+
+    Usage:
+        tracker = CourtTracker()
+        cap = cv2.VideoCapture(video_path)
+        for frame_idx in range(n_frames):
+            ret, frame = cap.read()
+            polygon, in_play = tracker.update(frame)
+            # polygon: np.ndarray (Nx2) or None
+            # in_play: bool
+    """
+
+    def __init__(
+        self,
+        revalidate_every: int = 100,       # frames between homography score checks
+        revalidate_threshold: float = 0.5, # fraction of initial score below which we re-detect
+        max_corners: int = 200,            # optical flow feature points
+        of_quality: float = 0.01,
+        of_min_dist: float = 10.0,
+    ):
+        self.revalidate_every = revalidate_every
+        self.revalidate_threshold = revalidate_threshold
+        self.max_corners = max_corners
+        self.of_quality = of_quality
+        self.of_min_dist = of_min_dist
+
+        self._detector = CourtDetector()
+        self._warp_matrix: Optional[np.ndarray] = None   # current H (court→frame)
+        self._initial_score: float = 0.0
+        self._baseline_score: float = 0.0
+        self._prev_gray: Optional[np.ndarray] = None
+        self._frame_count: int = 0
+        self._initialized: bool = False
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def update(self, frame: np.ndarray) -> tuple[Optional[np.ndarray], bool]:
+        """
+        Process one frame.
+        Returns (court_polygon, in_play).
+          - court_polygon: Nx2 int32 array or None if not detected yet
+          - in_play:       True when court lines are visible in this frame
+        """
+        in_play = frame_has_court(frame)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if not self._initialized:
+            if in_play:
+                polygon = self._initial_detect(frame, gray)
+            else:
+                polygon = None
+        else:
+            if in_play:
+                self._update_homography(gray)
+                if self._frame_count % self.revalidate_every == 0:
+                    self._revalidate(frame)
+                polygon = self._polygon_from_warp(frame)
+                self._prev_gray = gray
+            else:
+                # Camera is not showing the court — keep last known matrix
+                # but don't update optical flow (no court features to track)
+                polygon = None
+
+        self._frame_count += 1
+        return polygon, in_play
+
+    def get_current_polygon(self) -> Optional[np.ndarray]:
+        """Return polygon from the current warp matrix without updating state."""
+        if self._warp_matrix is None:
+            return None
+        return self._polygon_from_warp_matrix(self._warp_matrix)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _initial_detect(self, frame: np.ndarray, gray: np.ndarray) -> Optional[np.ndarray]:
+        result = self._detector.detect(frame)
+        if result is None or not self._detector.court_warp_matrix:
+            return None
+        self._warp_matrix = self._detector.court_warp_matrix[-1].copy()
+        self._initial_score = self._detector.court_score
+        self._baseline_score = self._detector.court_score
+        self._initialized = True
+        print(f"  [CourtTracker] Initial detection succeeded at frame {self._frame_count} "
+              f"(score={self._initial_score:.0f}, conf={self._detector.best_conf})")
+        self._prev_gray = gray
+        return self._polygon_from_warp(frame)
+
+    def _update_homography(self, gray: np.ndarray) -> None:
+        """Estimate frame-to-frame camera motion and warp H forward."""
+        if self._prev_gray is None or self._warp_matrix is None:
+            return
+
+        # Build a mask of where the court lines currently are
+        h, w = gray.shape
+        court_mask = cv2.warpPerspective(
+            self._detector.court_reference.court,
+            self._warp_matrix, (w, h)
+        )
+        court_mask = (court_mask > 0).astype(np.uint8)
+        # Dilate to give some slack around the lines
+        court_mask = cv2.dilate(court_mask, np.ones((15, 15), np.uint8))
+
+        # Find good features to track in the previous frame
+        prev_pts = cv2.goodFeaturesToTrack(
+            self._prev_gray,
+            maxCorners=self.max_corners,
+            qualityLevel=self.of_quality,
+            minDistance=self.of_min_dist,
+            mask=court_mask,   # only track features on court lines
+        )
+        if prev_pts is None or len(prev_pts) < 4:
+            return
+
+        curr_pts, status, _ = cv2.calcOpticalFlowPyrLK(
+            self._prev_gray, gray, prev_pts, None
+        )
+        if curr_pts is None:
+            return
+
+        good_prev = prev_pts[status.ravel() == 1]
+        good_curr = curr_pts[status.ravel() == 1]
+        if len(good_prev) < 4:
+            return
+
+        # Estimate the 2D rigid motion (translation + rotation, no shear)
+        # as an affine transform. For mostly pan cameras this is sufficient.
+        M, inliers = cv2.estimateAffinePartial2D(
+            good_prev, good_curr,
+            method=cv2.RANSAC,
+            ransacReprojThreshold=3.0,
+        )
+        if M is None:
+            return
+
+        M3 = np.eye(3, dtype=np.float64)
+        M3[:2, :] = M
+        candidate = M3 @ self._warp_matrix
+
+        # Reject updates that move the court polygon too far — likely a bad OF estimate
+        prev_poly = self._polygon_from_warp_matrix(self._warp_matrix, (h, w))
+        cand_poly = self._polygon_from_warp_matrix(candidate, (h, w))
+        if prev_poly is not None and cand_poly is not None:
+            shift = np.linalg.norm(cand_poly.mean(axis=0) - prev_poly.mean(axis=0))
+            if shift > 30:  # pixels — if the centroid jumps more than 30px, distrust it
+                return
+        self._warp_matrix = candidate
+
+    def _revalidate(self, frame: np.ndarray) -> None:
+        """Check current warp matrix quality; re-detect if score dropped too much."""
+        if self._warp_matrix is None:
+            return
+        self._detector.frame = frame
+        self._detector.gray = self._detector._threshold(frame)
+        score = self._detector._get_confi_score(self._warp_matrix)
+        if score < self._baseline_score * self.revalidate_threshold:
+            ratio = score / self._initial_score if self._initial_score > 0 else 0.0
+            print(f"  [CourtTracker] Score dropped to {ratio:.2f} of initial — re-detecting at frame {self._frame_count}")
+            result = self._detector.detect(frame)
+            if result is not None and self._detector.court_warp_matrix:
+                self._warp_matrix = self._detector.court_warp_matrix[-1].copy()
+                self._initial_score = self._detector.court_score
+                self._baseline_score = self._detector.court_score
+                print(f"  [CourtTracker] Re-detection succeeded (score={self._initial_score:.0f})")
+            else:
+                print(f"  [CourtTracker] Re-detection failed — keeping current matrix")
+
+    def _polygon_from_warp(self, frame: np.ndarray) -> Optional[np.ndarray]:
+        return self._polygon_from_warp_matrix(self._warp_matrix, frame.shape)
+
+    def _polygon_from_warp_matrix(
+        self,
+        matrix: np.ndarray,
+        shape: Optional[tuple] = None,
+    ) -> Optional[np.ndarray]:
+        if matrix is None:
+            return None
+        ref_court = self._detector.court_reference.court
+        h = ref_court.shape[0] if shape is None else shape[0]
+        w = ref_court.shape[1] if shape is None else shape[1]
+        warped = cv2.warpPerspective(ref_court, matrix, (w, h))
+        warped = (warped > 0).astype(np.uint8)
+
+        contours, _ = cv2.findContours(warped, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+        contour = max(contours, key=cv2.contourArea)
+        epsilon = 0.02 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+        return approx.reshape(-1, 2)

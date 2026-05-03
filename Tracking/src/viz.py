@@ -147,7 +147,7 @@ def make_annotated_video(
     out_path: str,
     labeled_players: list,
     ball_positions: list,
-    court_polygon: Optional[np.ndarray] = None,
+    court_polygons: Optional[list] = None,
     trail_len: int = 15,
 ) -> None:
     cap = cv2.VideoCapture(str(video_path))
@@ -165,8 +165,9 @@ def make_annotated_video(
         if not ret:
             break
         trail = ball_positions[max(0, idx - trail_len):idx + 1]
+        court_polygon = court_polygons[idx] if court_polygons is not None else None
         vis = draw_all(frame, labeled_players[idx], ball_positions[idx],
-                       ball_trail=trail, court_polygon=court_polygon)
+                    ball_trail=trail, court_polygon=court_polygon)
         txt = f"frame {idx}/{n}  |  ball={'yes' if ball_positions[idx] else 'no'}"
         cv2.putText(vis, txt, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         out.write(vis)

@@ -6,6 +6,12 @@ Usage:
         --output outputs/tracks/match1.json \
         --yolo-weights checkpoints/yolov8m.pt \
         --tracknet-weights checkpoints/tracknet/model_best.pt
+
+    # Only track court and ball, skip players:
+    python -m scripts.track --video ... --output ... --no-players
+
+    # Only track court:
+    python -m scripts.track --video ... --output ... --no-players --no-ball
 """
 
 import argparse
@@ -14,13 +20,14 @@ from pathlib import Path
 
 import cv2
 import torch
+from tqdm import tqdm
 
 # Make `src` importable when run from anywhere
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.ball import load_ball_model, smooth_ball_track, track_ball
-from src.court import CourtDetector
+from src.court import CourtDetector, CourtTracker
 from src.io_utils import get_video_info, save_tracks
 from src.players import (
     filter_and_label_players,
@@ -44,8 +51,14 @@ def main() -> None:
                         help="GPU batch size for TrackNet")
     parser.add_argument("--ball-conf", type=float, default=0.5,
                         help="Min heatmap peak (0-1) to accept a ball detection")
+
+    # Selective tracking flags
     parser.add_argument("--no-court", action="store_true",
-                        help="Skip court detection (faster but loses geometric filter)")
+                        help="Skip court detection")
+    parser.add_argument("--no-players", action="store_true",
+                        help="Skip player tracking (YOLOv8 + ByteTrack)")
+    parser.add_argument("--no-ball", action="store_true",
+                        help="Skip ball tracking (TrackNet)")
 
     parser.add_argument("--original-video", default=None,
                         help="Original video path to store in JSON (overrides the processed video path)")
@@ -70,69 +83,82 @@ def main() -> None:
         print(f"  Resize first: ffmpeg -i in.mp4 -vf scale=1280:720 out.mp4")
 
     # ── Players ────────────────────────────────────────────────────────────
-    print("\n[1/3] Player tracking (YOLOv8 + ByteTrack)")
-    raw_player_tracks = track_players(
-        args.video,
-        yolo_weights=args.yolo_weights,
-        n_frames_total=info["n_frames"],
-    )
-    main_ids = select_main_player_ids(raw_player_tracks, top_k=2)
-    labeled_players = filter_and_label_players(raw_player_tracks, main_ids)
-    stats = player_count_stats(labeled_players)
-    print(f"  2 players: {stats['both']}  /  1 player: {stats['one']}  /  0 players: {stats['none']}")
+    labeled_players = None
+    main_ids = []
+
+    if not args.no_players:
+        print("\n[1/3] Player tracking (YOLOv8 + ByteTrack)")
+        raw_player_tracks = track_players(
+            args.video,
+            yolo_weights=args.yolo_weights,
+            n_frames_total=info["n_frames"],
+        )
+        main_ids = select_main_player_ids(raw_player_tracks, top_k=2)
+        labeled_players = filter_and_label_players(raw_player_tracks, main_ids)
+        stats = player_count_stats(labeled_players)
+        print(f"  2 players: {stats['both']}  /  1 player: {stats['one']}  /  0 players: {stats['none']}")
+    else:
+        print("\n[1/3] Skipping player tracking (--no-players)")
+        labeled_players = [[] for _ in range(info["n_frames"])]
 
     # ── Court ──────────────────────────────────────────────────────────────
-    court_polygon = None
+    court_polygons_per_frame: list = []
+    in_play_flags: list[bool] = []
+
+
     if not args.no_court:
-        print("\n[2/3] Court detection (trying up to 5 frames)")
+        print("\n[2/3] Court detection + per-frame tracking")
+        court_tracker = CourtTracker()
         cap = cv2.VideoCapture(str(args.video))
-        detector = CourtDetector()
-        candidate_frames = [
-            info["n_frames"] // 6,
-            info["n_frames"] // 4,
-            info["n_frames"] // 2,
-            3 * info["n_frames"] // 4,
-            5 * info["n_frames"] // 6,
-        ]
-        for attempt, frame_idx in enumerate(candidate_frames):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            _, frame = cap.read()
-            if detector.detect(frame) is not None:
-                poly = detector.get_court_polygon()
-                if poly is not None:
-                    court_polygon = poly
-                    print(f"  Court detected on attempt {attempt+1} (frame {frame_idx})")
-                    print(f"  Best configuration: {detector.best_conf}  |  Score: {detector.court_score:.0f}")
-                    print(f"  Court polygon: {len(poly)} vertices")
-                    break
-            print(f"  Attempt {attempt+1} (frame {frame_idx}) failed, trying next...")
-        else:
-            print("  Court detection failed on all candidate frames — proceeding without polygon.")
+        n = info["n_frames"]
+        for _ in tqdm(range(n), desc="Court tracking"):
+            ret, frame = cap.read()
+            if not ret:
+                in_play_flags.append(False)
+                court_polygons_per_frame.append(None)
+                continue
+            polygon, in_play = court_tracker.update(frame)
+            in_play_flags.append(in_play)
+            court_polygons_per_frame.append(polygon.tolist() if polygon is not None else None)
+
         cap.release()
+        detected = sum(in_play_flags)
+        print(f"  Court visible in {detected}/{n} frames ({100*detected/n:.1f}%)")
+        if not any(p is not None for p in court_polygons_per_frame):
+            print("  WARNING: Court was never detected in any frame.")
     else:
         print("\n[2/3] Skipping court detection (--no-court)")
+        in_play_flags = [True] * info["n_frames"]
+        court_polygons_per_frame = [None] * info["n_frames"]
 
     # ── Ball ───────────────────────────────────────────────────────────────
-    print("\n[3/3] Ball tracking (TrackNet)")
-    if not Path(args.tracknet_weights).exists():
-        raise FileNotFoundError(
-            f"TrackNet weights not found at {args.tracknet_weights}. "
-            "Download model_best.pt from the yastrebksv/TrackNet README link."
-        )
-    ball_model = load_ball_model(args.tracknet_weights, device=device)
-    ball_positions_raw, ball_confidence = track_ball(
-        args.video, ball_model, device=device,
-        chunk=args.ball_chunk, conf_threshold=args.ball_conf,
-    )
-    n_detected = sum(1 for p in ball_positions_raw if p is not None)
-    print(f"  Detected: {n_detected} / {len(ball_positions_raw)} "
-          f"({100 * n_detected / len(ball_positions_raw):.1f}%)")
+    ball_positions_raw = [None] * info["n_frames"]
+    ball_positions_smooth = [None] * info["n_frames"]
+    ball_confidence = [0.0] * info["n_frames"]
 
-    ball_positions_smooth = smooth_ball_track(ball_positions_raw)
-    n_after = sum(1 for p in ball_positions_smooth if p is not None)
-    print(f"  After smoothing: {n_after} / {len(ball_positions_smooth)} "
-          f"({100 * n_after / len(ball_positions_smooth):.1f}%) "
-          f"— recovered {n_after - n_detected} via interpolation")
+    if not args.no_ball:
+        print("\n[3/3] Ball tracking (TrackNet)")
+        if not Path(args.tracknet_weights).exists():
+            raise FileNotFoundError(
+                f"TrackNet weights not found at {args.tracknet_weights}. "
+                "Download model_best.pt from the yastrebksv/TrackNet README link."
+            )
+        ball_model = load_ball_model(args.tracknet_weights, device=device)
+        ball_positions_raw, ball_confidence = track_ball(
+            args.video, ball_model, device=device,
+            chunk=args.ball_chunk, conf_threshold=args.ball_conf,
+        )
+        n_detected = sum(1 for p in ball_positions_raw if p is not None)
+        print(f"  Detected: {n_detected} / {len(ball_positions_raw)} "
+              f"({100 * n_detected / len(ball_positions_raw):.1f}%)")
+
+        ball_positions_smooth = smooth_ball_track(ball_positions_raw)
+        n_after = sum(1 for p in ball_positions_smooth if p is not None)
+        print(f"  After smoothing: {n_after} / {len(ball_positions_smooth)} "
+              f"({100 * n_after / len(ball_positions_smooth):.1f}%) "
+              f"— recovered {n_after - n_detected} via interpolation")
+    else:
+        print("\n[3/3] Skipping ball tracking (--no-ball)")
 
     # ── Save ───────────────────────────────────────────────────────────────
     video_path_to_save = args.original_video or args.video
@@ -149,7 +175,8 @@ def main() -> None:
         ball_positions_raw=ball_positions_raw,
         ball_positions_smooth=ball_positions_smooth,
         ball_confidence=ball_confidence,
-        court_polygon=court_polygon.tolist() if court_polygon is not None else None,
+        court_polygons_per_frame=court_polygons_per_frame,
+        in_play_flags=in_play_flags,
     )
     print("\nDone.")
 

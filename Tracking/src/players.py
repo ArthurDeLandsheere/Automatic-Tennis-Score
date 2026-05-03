@@ -10,6 +10,7 @@ from typing import Optional
 import numpy as np
 from tqdm.auto import tqdm
 from ultralytics import YOLO
+import math
 
 
 def track_players(
@@ -33,7 +34,7 @@ def track_players(
         source=str(video_path),
         classes=[0],          # COCO `person`
         persist=True,
-        tracker="bytetrack.yaml",
+        tracker="bytetrack_tennis.yaml",
         conf=conf,
         iou=iou,
         stream=True,
@@ -92,7 +93,7 @@ def select_main_player_ids(
     scored = []
     for pid, cnt in id_frame_count.items():
         median_area = float(np.median(id_areas[pid]))
-        scored.append((pid, cnt, median_area, cnt * median_area))
+        scored.append((pid, cnt, median_area, cnt * math.log1p(median_area)))
     scored.sort(key=lambda t: -t[3])
     main_ids = [t[0] for t in scored[:top_k]]
 
