@@ -66,7 +66,7 @@ def extract_frames(video_path, out_dir):
     print(f'[Step 1/3] Done. Extracted {actual_frames} frames to {frame_out}.')
     return frame_out, actual_frames, fps
 
-def get_tracking_video(video_path, num_frames, fps):
+def get_tracking_video(video_path):
     """
     If the video is already 720p, return it as-is.
     Otherwise, write a resized copy to a temp file and return that path.
@@ -112,6 +112,12 @@ def run_action_spotting(video_name, frame_dir, model_name, num_frames, fps, out_
     if pred_file is None:
         pred_file = os.path.join(out_dir, 'action_spotting')
 
+    expected_output = pred_file + '.json'
+    if os.path.exists(expected_output):
+        print(f'[Step 2/4] Action spotting predictions already exist at {expected_output}, skipping.')
+        return
+
+    print(f'[Step 2/4] Running action spotting (model: {model_name})...')
     cmd = [
         'python', 'test_e2e.py',
         os.path.join('checkpoints', model_name),
@@ -124,28 +130,41 @@ def run_action_spotting(video_name, frame_dir, model_name, num_frames, fps, out_
     subprocess.run(cmd, check=True, cwd=AS_DIR, env={**os.environ, 'PYTHONUNBUFFERED': '1'})
 
 def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK):
-    """
-    video_path: absolute path to the 720p video
-    out_dir:    absolute path to the per-video predictions folder
-    """
     output_path = os.path.join(out_dir, 'tracking.json')
 
     if os.path.exists(output_path):
-        print(f'[Step 3/3] Tracking predictions already exist at {output_path}, skipping.')
+        print(f'[Step 3/4] Tracking predictions already exist at {output_path}, skipping.')
         return output_path
 
-    print(f'[Step 3/3] Running tracking on {video_path}...')
-    cmd = [
-        'python', '-m', 'scripts.track',
-        '--video', video_path,
-        '--output', output_path,
-        '--yolo-weights', os.path.abspath(TRACKING_YOLO_WEIGHTS),
-        '--tracknet-weights', os.path.abspath(TRACKING_TRACKNET_WEIGHTS),
-        '--ball-chunk', str(ball_chunk),
-    ]
-    subprocess.run(cmd, check=True, cwd=TRACKING_DIR,
-                   env={**os.environ, 'PYTHONUNBUFFERED': '1'})
-    print(f'[Step 3/3] Tracking done. Results in {output_path}.')
+    print(f'[Step 3/4] Preparing tracking video (resizing to 720p if needed)...')
+    tracking_video_path, is_temp = get_tracking_video(video_path)
+    try:
+        print(f'[Step 3/4] Running tracking on {tracking_video_path}...')
+        cmd = [
+            'python', '-m', 'scripts.track',
+            '--video', tracking_video_path,
+            '--output', output_path,
+            '--yolo-weights', os.path.abspath(TRACKING_YOLO_WEIGHTS),
+            '--tracknet-weights', os.path.abspath(TRACKING_TRACKNET_WEIGHTS),
+            '--ball-chunk', str(ball_chunk),
+            '--original-video', video_path,
+            '--original-width',  str(AS_W),
+            '--original-height', str(AS_H),
+        ]
+        subprocess.run(cmd, check=True, cwd=TRACKING_DIR,
+                       env={**os.environ, 'PYTHONUNBUFFERED': '1'})
+        print(f'[Step 3/4] Tracking done. Results in {output_path}.')
+
+        if (AS_W, AS_H) != (TRACKING_W, TRACKING_H):
+            print(f'[Step 3/4] Scaling tracking coordinates to {AS_W}x{AS_H}...')
+            scale_tracking_to_1080p(output_path,
+                src_w=TRACKING_W, src_h=TRACKING_H,
+                dst_w=AS_W, dst_h=AS_H)
+    finally:
+        if is_temp:
+            os.remove(tracking_video_path)
+            print(f'[Step 3/4] Removed temp tracking video: {tracking_video_path}')
+
     return output_path
 
 def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=1920, dst_h=1080):
@@ -178,40 +197,68 @@ def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=192
     print(f'Scaled tracking coordinates from {src_w}x{src_h} to {dst_w}x{dst_h}.')
     
 
-def run_score(pred_dir, video_stem, out_dir):
+def run_score(pred_dir, video_stem, out_dir,
+                initial_sets=None, initial_games=None, initial_points=None, force=False):
     tracking_path = os.path.join(pred_dir, 'tracking.json')
     preds_path = os.path.join(pred_dir, 'action_spotting.json')
     output_path = os.path.join(out_dir, 'score.json')
 
-    if os.path.exists(output_path):
-        print(f'[Step 4/4] Score already exists at {output_path}, skipping.')
+    if os.path.exists(output_path) and not force:
+        print(f'[Step 4/4] Score already exists at {output_path}, skipping. Use --force-score to recompute.')
         return output_path
+    if os.path.exists(output_path) and force:
+        print(f'[Step 4/4] Score already exists but --force-score set, recomputing...')
+    else:
+        print(f'[Step 4/4] Computing score...')
 
-    print(f'[Step 4/4] Computing score...')
     cmd = [
         'python', '-m', 'scripts.score',
         '--tracking', tracking_path,
         '--preds', preds_path,
         '--output', output_path,
     ]
+    if initial_sets:
+        cmd += ['--initial-sets', initial_sets]
+    if initial_games:
+        cmd += ['--initial-games', initial_games]
+    if initial_points:
+        cmd += ['--initial-points', initial_points]
     subprocess.run(cmd, check=True, cwd=os.path.abspath('.'),
                    env={**os.environ, 'PYTHONUNBUFFERED': '1'})
     print(f'[Step 4/4] Score done. Results in {output_path}.')
     return output_path
 
-
+def check_cuda():
+    """Abort early if no CUDA GPU is available."""
+    import torch
+    if not torch.cuda.is_available():
+        print('ERROR: No CUDA GPU detected. Aborting.')
+        sys.exit(1)
+    gpu_name = torch.cuda.get_device_name(0)
+    print(f'GPU detected: {gpu_name} — OK.')
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--video_name', required=True, help='Name of the video to process (eg. match.mp4).')
     parser.add_argument('--as_model_name', required=True, choices=['tennis_rny002gsm_gru_rgb', 'tennis_rny008gsm_gru_rgb'],
                             help='Name of the pre-trained models for Action-Spotting.')
+    parser.add_argument('--force-score', action='store_true',
+                        help='Recompute score even if score.json already exists.')
+
+    parser.add_argument('--initial-sets',   default=None,
+                        help="Initial set score as FAR:NEAR, e.g. '1:0'")
+    parser.add_argument('--initial-games',  default=None,
+                        help="Initial game score as FAR:NEAR, e.g. '3:2'")
+    parser.add_argument('--initial-points', default=None,
+                        help="Initial point score as FAR:NEAR, e.g. '2:1'")
 
     return parser.parse_args()
 
 if __name__ == '__main__':
     sys.stdout.reconfigure(line_buffering=True)
     args = get_args()
+
+    check_cuda()
 
     video_path = os.path.abspath(os.path.join(VIDEO_DIR, args.video_name))
     video_stem = os.path.splitext(args.video_name)[0]
@@ -235,22 +282,16 @@ if __name__ == '__main__':
     print(f'[Step 2/4] Action spotting done. Results in {pred_dir}.')
 
     # Step 3: tracking
-    print(f'\n[Step 3/4] Preparing tracking video (resizing to 720p if needed)...')
-    tracking_video_path, is_temp = get_tracking_video(video_path, num_frames, fps)
-    try:
-        tracking_path = run_tracking(tracking_video_path, pred_dir)
-        if (AS_W, AS_H) != (TRACKING_W, TRACKING_H):
-            scale_tracking_to_1080p(tracking_path,
-                src_w=TRACKING_W, src_h=TRACKING_H,
-                dst_w=AS_W, dst_h=AS_H)
-    finally:
-        if is_temp:
-            os.remove(tracking_video_path)
-            print(f'Removed temp tracking video: {tracking_video_path}')
+    print(f'\n[Step 3/4] Running tracking...')
+    run_tracking(video_path, pred_dir)
+    print(f'[Step 3/4] Tracking done. Results in {pred_dir}.')
 
     # Step 4: score computation
-    print(f'\n[Step 4/4] Computing score...')
-    run_score(pred_dir, video_stem, pred_dir)
+    run_score(pred_dir, video_stem, pred_dir,
+          initial_sets=args.initial_sets,
+          initial_games=args.initial_games,
+          initial_points=args.initial_points,
+          force=args.force_score)
 
     print(f'\n{"="*60}')
     print(f'Pipeline complete for: {args.video_name}')

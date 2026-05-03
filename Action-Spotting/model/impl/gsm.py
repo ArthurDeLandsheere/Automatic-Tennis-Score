@@ -30,7 +30,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import torch
 from torch import nn
-from torch.cuda import FloatTensor as ftens
 
 
 class _GSM(nn.Module):
@@ -48,10 +47,10 @@ class _GSM(nn.Module):
         self.relu = nn.ReLU()
 
     def lshift_zeroPad(self, x):
-        return torch.cat((x[:,:,1:], ftens(x.size(0), x.size(1), 1, x.size(3), x.size(4)).fill_(0)), dim=2)
+        return torch.cat((x[:,:,1:], torch.zeros(x.size(0), x.size(1), 1, x.size(3), x.size(4), dtype=x.dtype, device=x.device)), dim=2)
 
     def rshift_zeroPad(self, x):
-        return torch.cat((ftens(x.size(0), x.size(1), 1, x.size(3), x.size(4)).fill_(0), x[:,:,:-1]), dim=2)
+        return torch.cat((torch.zeros(x.size(0), x.size(1), 1, x.size(3), x.size(4), dtype=x.dtype, device=x.device), x[:,:,:-1]), dim=2)
 
     def forward(self, x):
         batchSize = x.size(0) // self.num_segments

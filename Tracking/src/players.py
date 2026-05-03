@@ -42,6 +42,13 @@ def track_players(
 
     for result in tqdm(results_gen, total=n_frames_total, desc="YOLOv8+ByteTrack"):
         frame_dets = []
+
+        # Temp debug
+        n_raw = len(result.boxes) if result.boxes is not None else 0
+        n_tracked = len(result.boxes.id) if (result.boxes is not None and result.boxes.id is not None) else 0
+        if n_raw != n_tracked:
+            print(f"frame: {n_raw} detections, {n_tracked} with ID")
+
         if result.boxes is not None and result.boxes.id is not None:
             ids = result.boxes.id.int().cpu().numpy()
             bboxes = result.boxes.xyxy.cpu().numpy()

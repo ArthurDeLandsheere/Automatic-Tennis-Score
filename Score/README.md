@@ -165,3 +165,15 @@ Score
 ├── score.py
 └── README.md
 ```
+
+I added the possibility to specify what the score is at the beginning of the video (default to 0-0 of course). The force-score flag forces the recomputation of the score even if the `score.json` file is alredy there.
+```bash
+python pipeline.py \
+      --video_name test_clip.mp4 \
+      --as_model_name tennis_rny008gsm_gru_rgb \
+      --initial-sets 0:0 \
+      --initial-games 0:0 \
+      --initial-points 2:2 \
+      --force-score
+```
+By doing this, the pipeline will start computing the score from 30-30 in the first game of the match.

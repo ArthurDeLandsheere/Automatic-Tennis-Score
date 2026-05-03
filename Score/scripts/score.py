@@ -41,7 +41,8 @@ log = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run_one(tracking_path: Path, preds_path: Path, output_path: Path) -> None:
+def _run_one(tracking_path: Path, preds_path: Path, output_path: Path, 
+                initial_sets=None, initial_games=None, initial_points=None) -> None:
     log.info("=== %s ===", tracking_path.stem)
 
     tracking = load_tracking(tracking_path)
@@ -51,7 +52,10 @@ def _run_one(tracking_path: Path, preds_path: Path, output_path: Path) -> None:
     log.info("Merged %d frames  (tracking=%d, preds=%d)",
              len(frames), tracking["n_frames"], len(predictions))
 
-    computer = ScoreComputer(tracking)
+    computer = ScoreComputer(tracking,
+                             initial_sets=initial_sets,
+                             initial_games=initial_games,
+                             initial_points=initial_points)
     result = computer.run(frames)
     result.setdefault("video", tracking.get("video", tracking_path.stem))
 
@@ -89,6 +93,22 @@ def _match_pairs(
 # CLI
 # ---------------------------------------------------------------------------
 
+def _parse_score_arg(value: str | None) -> dict | None:
+    """Parse 'FAR:NEAR' string into {FAR: int, NEAR: int}, e.g. '1:0' -> {FAR:1, NEAR:0}."""
+    if value is None:
+        return None
+    far, near = value.split(":")
+    return {'far': int(far), 'near': int(near)}
+
+def _parse_points_arg(value: str | None) -> dict | None:
+    """Same as _parse_score_arg but validates point values (0-3)."""
+    result = _parse_score_arg(value)
+    if result is not None:
+        for side, v in result.items():
+            if not (0 <= v <= 3):
+                raise ValueError(f"Point values must be 0-3, got {v}")
+    return result
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Compute tennis scores from tracking + action-spotting outputs.",
@@ -100,6 +120,13 @@ def parse_args() -> argparse.Namespace:
     single.add_argument("--tracking", type=Path, help="Path to tracking JSON")
     single.add_argument("--preds",    type=Path, help="Path to action-spotting predictions JSON")
     single.add_argument("--output",   type=Path, help="Output JSON path")
+
+    single.add_argument("--initial-sets",   default=None,
+                        help="Initial set score as FAR:NEAR, e.g. '1:0'")
+    single.add_argument("--initial-games",  default=None,
+                        help="Initial game score as FAR:NEAR, e.g. '3:2'")
+    single.add_argument("--initial-points", default=None,
+                        help="Initial point score as FAR:NEAR, e.g. '2:1' (0=0, 1=15, 2=30, 3=40)")
 
     # Batch mode
     batch = p.add_argument_group("batch mode")
@@ -118,7 +145,10 @@ def main() -> None:
         if not args.tracking or not args.preds or not args.output:
             log.error("Single-video mode requires --tracking, --preds, and --output.")
             sys.exit(1)
-        _run_one(args.tracking, args.preds, args.output)
+        _run_one(args.tracking, args.preds, args.output,
+                    initial_sets=_parse_score_arg(args.initial_sets),
+                    initial_games=_parse_score_arg(args.initial_games),
+                    initial_points=_parse_points_arg(args.initial_points))
         return
 
     # ---- batch mode -------------------------------------------------------

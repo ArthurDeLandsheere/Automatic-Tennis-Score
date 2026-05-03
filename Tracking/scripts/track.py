@@ -46,6 +46,12 @@ def main() -> None:
                         help="Min heatmap peak (0-1) to accept a ball detection")
     parser.add_argument("--no-court", action="store_true",
                         help="Skip court detection (faster but loses geometric filter)")
+
+    parser.add_argument("--original-video", default=None,
+                        help="Original video path to store in JSON (overrides the processed video path)")
+    parser.add_argument("--original-width",  type=int, default=None)
+    parser.add_argument("--original-height", type=int, default=None)
+
     args = parser.parse_args()
 
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -78,22 +84,31 @@ def main() -> None:
     # ── Court ──────────────────────────────────────────────────────────────
     court_polygon = None
     if not args.no_court:
-        print("\n[2/3] Court detection (homography on mid-clip frame)")
+        print("\n[2/3] Court detection (trying up to 5 frames)")
         cap = cv2.VideoCapture(str(args.video))
-        cap.set(cv2.CAP_PROP_POS_FRAMES, info["n_frames"] // 2)
-        _, mid_frame = cap.read()
-        cap.release()
         detector = CourtDetector()
-        if detector.detect(mid_frame) is not None:
-            poly = detector.get_court_polygon()
-            if poly is not None:
-                court_polygon = poly
-                print(f"  Best configuration: {detector.best_conf}  |  Score: {detector.court_score:.0f}")
-                print(f"  Court polygon: {len(poly)} vertices")
-            else:
-                print("  Court detection returned a homography but no polygon — skipping.")
+        candidate_frames = [
+            info["n_frames"] // 6,
+            info["n_frames"] // 4,
+            info["n_frames"] // 2,
+            3 * info["n_frames"] // 4,
+            5 * info["n_frames"] // 6,
+        ]
+        for attempt, frame_idx in enumerate(candidate_frames):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            _, frame = cap.read()
+            if detector.detect(frame) is not None:
+                poly = detector.get_court_polygon()
+                if poly is not None:
+                    court_polygon = poly
+                    print(f"  Court detected on attempt {attempt+1} (frame {frame_idx})")
+                    print(f"  Best configuration: {detector.best_conf}  |  Score: {detector.court_score:.0f}")
+                    print(f"  Court polygon: {len(poly)} vertices")
+                    break
+            print(f"  Attempt {attempt+1} (frame {frame_idx}) failed, trying next...")
         else:
-            print("  Court detection failed on mid-frame — proceeding without polygon.")
+            print("  Court detection failed on all candidate frames — proceeding without polygon.")
+        cap.release()
     else:
         print("\n[2/3] Skipping court detection (--no-court)")
 
@@ -120,9 +135,14 @@ def main() -> None:
           f"— recovered {n_after - n_detected} via interpolation")
 
     # ── Save ───────────────────────────────────────────────────────────────
+    video_path_to_save = args.original_video or args.video
+    if args.original_width and args.original_height:
+        info["width"]  = args.original_width
+        info["height"] = args.original_height
+
     save_tracks(
         output_path=args.output,
-        video_path=args.video,
+        video_path=video_path_to_save,
         video_info=info,
         main_player_ids=main_ids,
         labeled_players=labeled_players,
