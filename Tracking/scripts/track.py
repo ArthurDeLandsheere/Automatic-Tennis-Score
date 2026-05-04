@@ -105,7 +105,6 @@ def main() -> None:
         labeled_players = [[] for _ in range(info["n_frames"])]
 
     # ── Court ──────────────────────────────────────────────────────────────
-    court_polygons_per_frame: list = []
     court_keypoints_per_frame: list = []
     in_play_flags: list[bool] = []
 
@@ -119,11 +118,10 @@ def main() -> None:
             ret, frame = cap.read()
             if not ret:
                 in_play_flags.append(False)
-                court_polygons_per_frame.append(None)
+                court_keypoints_per_frame.append([])
                 continue
-            polygon, keypoints, in_play = court_tracker.update(frame)
+            keypoints, in_play = court_tracker.update(frame)
             in_play_flags.append(in_play)
-            court_polygons_per_frame.append(polygon.tolist() if polygon is not None else None)
             court_keypoints_per_frame.append(
                 [[float(x), float(y)] for x, y in keypoints if x is not None and y is not None]
             )
@@ -131,12 +129,11 @@ def main() -> None:
         cap.release()
         detected = sum(in_play_flags)
         print(f"  Court visible in {detected}/{n} frames ({100*detected/n:.1f}%)")
-        if not any(p is not None for p in court_polygons_per_frame):
+        if not any(kps for kps in court_keypoints_per_frame):
             print("  WARNING: Court was never detected in any frame.")
     else:
         print("\n[2/3] Skipping court detection (--no-court)")
         in_play_flags = [True] * info["n_frames"]
-        court_polygons_per_frame = [None] * info["n_frames"]
         court_keypoints_per_frame = [[] for _ in range(info["n_frames"])]
 
     # ── Ball ───────────────────────────────────────────────────────────────
@@ -183,7 +180,6 @@ def main() -> None:
         ball_positions_raw=ball_positions_raw,
         ball_positions_smooth=ball_positions_smooth,
         ball_confidence=ball_confidence,
-        court_polygons_per_frame=court_polygons_per_frame,
         court_keypoints_per_frame=court_keypoints_per_frame,
         in_play_flags=in_play_flags,
     )

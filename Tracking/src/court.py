@@ -17,23 +17,12 @@ import torch.nn.functional as F
 
 from src.court_tracknet import BallTrackerNet
 from src.court_postprocess import postprocess, refine_kps
-from src.court_homography import get_trans_matrix, refer_kps
-from src.court_reference import CourtReference
+from src.court_homography import get_trans_matrix
 
 
 # ---------------------------------------------------------------------------
 # Unchanged helpers
 # ---------------------------------------------------------------------------
-
-def point_in_court(point_xy: tuple[float, float], court_polygon: np.ndarray) -> bool:
-    """True if the point (x, y) is inside the polygon."""
-    if court_polygon is None:
-        return True
-    result = cv2.pointPolygonTest(
-        court_polygon, (float(point_xy[0]), float(point_xy[1])), False
-    )
-    return result >= 0
-
 
 def frame_has_court(frame: np.ndarray, threshold: int = 3000) -> bool:
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -125,78 +114,54 @@ class CourtDetector:
 
 class CourtTracker:
     """
-    Tracks the court polygon across video frames using per-frame DL inference.
+    Tracks court keypoints across video frames using per-frame DL inference.
 
-    Compared to the previous optical-flow version, each frame is detected
-    independently — no homography propagation, no revalidation needed.
-    Frames where frame_has_court() is False are skipped and return None.
+    Each frame is detected independently — no homography propagation needed.
+    Frames where frame_has_court() is False are skipped and return empty keypoints.
 
     Usage:
         tracker = CourtTracker(model_path=..., device=...)
-        polygon, in_play = tracker.update(frame)   # frame is BGR numpy array
+        keypoints, in_play = tracker.update(frame)   # frame is BGR numpy array
+
+    Keypoint index mapping (14 points):
+        0: baseline_top[0]        (top-left baseline corner)
+        1: baseline_top[1]        (top-right baseline corner)
+        2: baseline_bottom[0]     (bottom-left baseline corner)
+        3: baseline_bottom[1]     (bottom-right baseline corner)
+        4: left_inner_line[0]     (top-left singles sideline)
+        5: left_inner_line[1]     (bottom-left singles sideline)
+        6: right_inner_line[0]    (top-right singles sideline)
+        7: right_inner_line[1]    (bottom-right singles sideline)
+        8: top_inner_line[0]      (top-left service box corner)
+        9: top_inner_line[1]      (top-right service box corner)
+       10: bottom_inner_line[0]   (bottom-left service box corner)
+       11: bottom_inner_line[1]   (bottom-right service box corner)
+       12: middle_line[0]         (net centre, top half)
+       13: middle_line[1]         (net centre, bottom half)
+
+    The "top" half of the court (indices 0, 1, 4, 6, 8, 9, 12) is the FAR
+    side; the "bottom" half (indices 2, 3, 5, 7, 10, 11, 13) is the NEAR side.
+    The net runs between kp[12] and kp[13].
     """
 
     def __init__(self, model_path: str, device: str = "cpu"):
         self._detector = CourtDetector(model_path=model_path, device=device)
-        self._court_ref = CourtReference()
-        self._court_ref.build_court_reference()
-        self._last_matrix: Optional[np.ndarray] = None
         self._last_keypoints: list = []
 
-    def update(self, frame: np.ndarray) -> tuple[Optional[np.ndarray], bool]:
+    def update(self, frame: np.ndarray) -> tuple[list, bool]:
         """
         Process one frame.
-        Returns (court_polygon, in_play).
-          - court_polygon: Nx2 int32 array, or None if not detected
-          - in_play:       True when court lines are visible in this frame
+        Returns (keypoints, in_play).
+          - keypoints: list of 14 (x, y) pairs, or [] if not detected
+          - in_play:   True when court lines are visible in this frame
         """
         in_play = frame_has_court(frame)
 
         if not in_play:
-            return None, [], False
+            return [], False
 
-        matrix, keypoints = self._detector.detect(frame)
-        if matrix is not None:
-            self._last_matrix = matrix
+        _matrix, keypoints = self._detector.detect(frame)
+        if keypoints:
             self._last_keypoints = keypoints
 
-        if self._last_matrix is None:
-            return None, [], True
-
-        polygon = self._polygon_from_matrix(self._last_matrix, frame.shape)
-        return polygon, self._last_keypoints, True
-
-    def get_current_polygon(self) -> Optional[np.ndarray]:
-        """Return polygon from the last successful detection without updating state."""
-        if self._last_matrix is None:
-            return None
-        return self._polygon_from_matrix(self._last_matrix)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _polygon_from_matrix(
-        self,
-        matrix: np.ndarray,
-        shape: Optional[tuple] = None,
-    ) -> Optional[np.ndarray]:
-        """Warp the court reference silhouette and extract its contour polygon."""
-        ref_court = self._court_ref.court  # binary reference image
-
-        if shape is not None:
-            h, w = shape[:2]
-        else:
-            h, w = ref_court.shape[:2]
-
-        warped = cv2.warpPerspective(ref_court, matrix, (w, h))
-        warped = (warped > 0).astype(np.uint8)
-
-        contours, _ = cv2.findContours(warped, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-
-        contour = max(contours, key=cv2.contourArea)
-        epsilon = 0.02 * cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, epsilon, True)
-        return approx.reshape(-1, 2)
+        return self._last_keypoints, True

@@ -219,8 +219,6 @@ def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=192
             ball['y'] *= sy
 
     for frame in data['frames']:
-        if frame.get('court_polygon'):
-            frame['court_polygon'] = [[x*sx, y*sy] for x, y in frame['court_polygon']]
         if frame.get("court_keypoints"):
             frame["court_keypoints"] = [[x * sx, y * sy] for x, y in frame["court_keypoints"]]
 

@@ -48,6 +48,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any
+import cv2
+import numpy as np
 
 log = logging.getLogger(__name__)
 
@@ -270,7 +272,7 @@ class ScoreComputer:
         self.serve_side = None
 
         self.is_serving = False   # True during the time between the serve and the first bounce, false otherwise, it is to account for the fact that there are two serves
-
+        self.expected_serve_target_x = None
 
     def run(self, frames):
         for frame in frames:
@@ -293,33 +295,43 @@ class ScoreComputer:
             kind = label.split("_court_")[1]
 
             if kind == "serve":
-                self.serve(side, frame_index)
+                self.serve(side, frame_index, frame)
             elif kind == "bounce":
-                self.bounce(side, frame_index)
+                self.bounce(side, frame_index, frame)
             elif kind == "swing":
-                self.swing(side, frame_index)
+                self.swing(side, frame_index, frame)
 
+    def serve(self, serve_side: str, frame_index: int, frame: dict):
+        # Determine total points using safe string keys
+        total_points = self.score.points["far"] + self.score.points["near"]
+        is_even_score = (total_points % 2 == 0)
 
-    def serve(self, server_side: str, frame_index: int) -> None:
-        # Close previous rally if one was running
-        if self.rally_ongoing:
-            winner = (self.other(self.last_swing_side)
-                      if self.last_swing_side else self.other(server_side))
-            self.finish_rally(frame_index - 1, winner_side=winner)
+        if serve_side == "far":
+            self.expected_serve_target_x = "right" if is_even_score else "left"
+        else:
+            self.expected_serve_target_x = "left" if is_even_score else "right"
 
-        self.serve_side = server_side
+        # Action-spotting check: Was a ball actually detected? 
+        if not frame.get("ball") or frame["ball"].get("conf", 0) < 0.2:
+            log.warning(f"Frame {frame_index}: Action-spotting detected serve, but tracking missed the ball.")
+
         self.is_serving = True
-        self.last_swing_side = server_side
+        self.serve_side = serve_side
+        self.last_swing_side = serve_side
         self.rally_ongoing = True
 
-        if self.score.serve_number == 1:   # only start a new point on first serve
-            self.score.new_point(server_side, frame_index)
+        self.score.new_point(serve_side, frame_index)
 
-    def bounce(self, bounce_side: str, frame_index: int):
+    def bounce(self, bounce_side: str, frame_index: int, frame: dict):
         if not self.rally_ongoing:
             return
 
-        # If ball bounced on the server side at the service
+        ball = frame.get("ball")
+        court_kps = frame.get("court_keypoints")
+
+        if not ball or ball.get("conf", 0) < 0.2:
+            log.warning(f"Frame {frame_index}: Action-spotting detected bounce, but tracking missed the ball.")
+            
         if self.is_serving and bounce_side == self.serve_side:
             is_double_fault = self.score.serve_fault(frame_index)
             self.rally_ongoing = False
@@ -329,21 +341,82 @@ class ScoreComputer:
                 self.last_swing_side = None
             return
 
-        # Rally ball bounced on the side of the hiiter
-        if (not self.is_serving and self.last_swing_side is not None and bounce_side == self.last_swing_side):
-            winner = self.other(self.last_swing_side)
+        is_out = False
+
+        if ball and court_kps:
+            ball_pt = (ball["x"], ball["y"])
+            center_x = (court_kps[12][0] + court_kps[13][0]) / 2.0
+
+            if self.is_serving:
+                # 1. SERVE VALIDATION
+                # The net is not explicitly in the 14 keypoints, but it lies exactly halfway
+                # between the top baselines (4, 6) and bottom baselines (5, 7).
+                net_left = ((court_kps[4][0] + court_kps[5][0]) / 2.0, (court_kps[4][1] + court_kps[5][1]) / 2.0)
+                net_right = ((court_kps[6][0] + court_kps[7][0]) / 2.0, (court_kps[6][1] + court_kps[7][1]) / 2.0)
+
+                if bounce_side == "far":
+                    # FAR service boxes: bounded by top service line (8, 9) and the net
+                    service_poly = np.array([court_kps[8], court_kps[9], net_right, net_left], dtype=np.float32)
+                else:
+                    # NEAR service boxes: bounded by bottom service line (10, 11) and the net
+                    service_poly = np.array([court_kps[10], court_kps[11], net_right, net_left], dtype=np.float32)
+                
+                hull = cv2.convexHull(service_poly)
+                # measureDist=True allows us to see exactly how far out the ball is
+                dist = cv2.pointPolygonTest(hull, ball_pt, measureDist=True)
+
+                bounced_right = ball["x"] > center_x
+                expected_right = (self.expected_serve_target_x == "right")
+                
+                # Give a 10-pixel margin of error for tracking jitter
+                if dist < -10 or (bounced_right != expected_right):
+                    is_out = True
+
+            else:
+                # 2. RALLY VALIDATION (Singles Court)
+                singles_indices = [4, 5, 6, 7]
+                singles_corners = [court_kps[i] for i in singles_indices]
+                pts = np.array(singles_corners, dtype=np.float32)
+                hull = cv2.convexHull(pts)
+                dist = cv2.pointPolygonTest(hull, ball_pt, measureDist=True)
+
+                if dist < -10:
+                    is_out = True
+
+        if is_out:
+            if self.is_serving:
+                is_double_fault = self.score.serve_fault(frame_index)
+                self.rally_ongoing = False
+                if is_double_fault:
+                    self.reset_rally_state()
+                else:
+                    self.last_swing_side = None
+                return
+            else:
+                if self.last_swing_side is not None:
+                    # Safely determine the winner without risking an AttributeError
+                    winner = "far" if self.last_swing_side == "near" else "near"
+                    self.finish_rally(frame_index, winner_side=winner)
+                    return
+
+        self.is_serving = False
+
+        if self.last_swing_side is not None and bounce_side == self.last_swing_side:
+            winner = "far" if self.last_swing_side == "near" else "near"
             self.finish_rally(frame_index, winner_side=winner)
             return
 
-        # Normal bounce in opponent court 
-        # Il faut ajouter la partie tracking ici
-        self.is_serving = False
-
-    def swing(self, swing_side: str, freme_index: int):
-        if not self.rally_ongoing:
-            return
-        self.last_swing_side = swing_side
-        self.is_serving = False
+    def swing(self, swing_side: str, frame_index: int, frame: dict):
+        if not frame.get("ball") or frame["ball"].get("conf", 0) < 0.2:
+            log.warning(f"Frame {frame_index}: Action-spotting detected swing, but tracking missed the ball.")
+            
+        if self.rally_ongoing:
+            # SAFETY CATCH: If the receiver swings, the serve landed safely and the rally is on.
+            # This fixes the state if action-spotting completely missed the serve bounce!
+            if self.is_serving and swing_side != self.serve_side:
+                self.is_serving = False
+                
+            self.last_swing_side = swing_side
 
     def finish_rally(self, frame_index: int,
                      winner_side: str|None = None):
