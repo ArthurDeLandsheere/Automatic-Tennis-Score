@@ -120,6 +120,7 @@ The file `pipeline.py` implements an end-to-end process on a single video. It do
 2. Runs action spotting on the extracted frames.
 3. Runs tracking on a resized version of the video to match the input size of the tracking components.
 4. Computes the score based on the outputs of action spotting and tracking by using the `score.py` file.
+5. Annotates the video with tracking and action-spotting outputs.
 
 **Important things**:
 - The input video must be `1920x1080` to match the input of action spotting. It will be automatically resized to `1280x720` for the tracking part.
@@ -203,3 +204,8 @@ Here are the flags available in the `pipeline.py` script:
 
 * `--initial-points`
   Sets the starting point score in `FAR:NEAR` format (e.g., `2:1`).
+
+* `--no-viz`
+  Slip the visualization step.
+* `--force-viz`
+  Force the visualization step even if outputs already exist.

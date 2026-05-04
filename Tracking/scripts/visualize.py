@@ -9,6 +9,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
+import json
 
 import numpy as np
 
@@ -50,6 +51,17 @@ def main() -> None:
         for f in tracks["frames"]
     ]
 
+    as_path = Path(args.tracks).parent / 'action_spotting.json'
+    action_events = []
+    if as_path.exists():
+        with open(as_path) as f:
+            as_data = json.load(f)
+        # action_spotting.json is a list with one entry per video
+        action_events = as_data[0]['events'] if as_data else []
+        print(f"Loaded {len(action_events)} action spotting events.")
+    else:
+        print("No action_spotting.json found, skipping event overlay.")
+
     # 1) Sample frames grid
     show_sample_frames(
         video_path, labeled_players, ball_positions=ball_positions, court_keypoints_per_frame=court_keypoints_per_frame,
@@ -70,6 +82,7 @@ def main() -> None:
             labeled_players=labeled_players,
             ball_positions=ball_positions,
             court_keypoints_per_frame=court_keypoints_per_frame,
+            action_events=action_events,
         )
 
     print(f"\nDone. Outputs in {out_dir}/")

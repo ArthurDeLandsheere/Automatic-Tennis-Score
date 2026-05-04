@@ -7,13 +7,24 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm.auto import tqdm
-
+from collections import defaultdict
 
 _COLOR_BY_SIDE = {
     "top":     (0, 180, 255),    # orange in BGR
     "bottom":  (255, 120, 0),    # blue in BGR
     "unknown": (180, 180, 180),
 }
+# Color per action label (BGR)
+_COLOR_BY_ACTION = {
+    "far_court_serve":    (0, 200, 255),   # yellow
+    "near_court_serve":   (0, 165, 255),   # orange
+    "far_court_bounce":   (255, 100, 0),   # blue
+    "near_court_bounce":  (255, 50, 50),   # darker blue
+    "far_court_swing":    (0, 200, 0),     # green
+    "near_court_swing":   (0, 140, 0),     # darker green
+}
+_DEFAULT_ACTION_COLOR = (200, 200, 200)
+_EVENT_WINDOW = 5  # frames before/after event to show banner
 
 
 def draw_players(frame: np.ndarray, frame_dets: list[dict]) -> np.ndarray:
@@ -52,6 +63,72 @@ def draw_court(frame: np.ndarray, court_keypoints: Optional[list]) -> np.ndarray
     for (x, y) in court_keypoints:
         cv2.circle(vis, (int(x), int(y)), 6, (0, 0, 255), -1)
     return vis
+
+
+def _draw_static_event_dashboard(frame: np.ndarray, current_states: dict) -> np.ndarray:
+    """Draw a static dashboard of all events, highlighted based on state."""
+    h, w = frame.shape[:2]
+    labels = list(_COLOR_BY_ACTION.keys())
+    num_labels = len(labels)
+
+    banner_h = 40
+    box_w = w // num_labels
+
+    # Shorter names for better display
+    display_names = {
+        "far_court_serve": "Far Serve",
+        "near_court_serve": "Near Serve",
+        "far_court_bounce": "Far Bounce",
+        "near_court_bounce": "Near Bounce",
+        "far_court_swing": "Far Swing",
+        "near_court_swing": "Near Swing",
+    }
+
+    for i, label in enumerate(labels):
+        state = current_states.get(label, 0)
+        
+        x1 = i * box_w
+        # Ensure the last box reaches the exact edge of the frame
+        x2 = (i + 1) * box_w if i < num_labels - 1 else w 
+        y1, y2 = 0, banner_h
+
+        base_color = _COLOR_BY_ACTION.get(label, _DEFAULT_ACTION_COLOR)
+
+        # Set opacity based on state (2: happening, 1: approaching, 0: inactive)
+        if state == 2:
+            alpha = 0.85
+        elif state == 1:
+            alpha = 0.40
+        else:
+            alpha = 0.15
+
+        # Extract the region of interest and blend the color
+        roi = frame[y1:y2, x1:x2]
+        overlay = roi.copy()
+        cv2.rectangle(overlay, (0, 0), (x2 - x1, y2 - y1), base_color, -1)
+        cv2.addWeighted(overlay, alpha, roi, 1 - alpha, 0, roi)
+
+        # Draw box border
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (200, 200, 200), 1)
+
+        # Text properties - LARGER AND BOLDER
+        text = display_names.get(label, label)
+        font_scale = 0.6  # Increased from 0.45
+        
+        # Calculate text size to center it properly
+        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 2)
+        tx = x1 + (x2 - x1 - tw) // 2
+        ty = y1 + (y2 - y1 + th) // 2
+
+        # Pure white for approaching/happening, light gray for inactive
+        txt_color = (255, 255, 255) if state > 0 else (200, 200, 200)
+        
+        # Bolder text depending on state
+        thickness = 3 if state == 2 else (2 if state == 1 else 1)
+
+        cv2.putText(frame, text, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, font_scale, txt_color, thickness)
+
+    return frame
 
 
 def draw_all(
@@ -151,6 +228,7 @@ def make_annotated_video(
     labeled_players: list,
     ball_positions: list,
     court_keypoints_per_frame: Optional[list] = None,
+    action_events: Optional[list] = None,
     trail_len: int = 15,
 ) -> None:
     cap = cv2.VideoCapture(str(video_path))
@@ -163,16 +241,49 @@ def make_annotated_video(
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(str(out_path), fourcc, fps, (W, H))
 
+    # Build a per-frame event state lookup
+    # States -> 0: inactive, 1: approaching/leaving, 2: happening
+    event_states = defaultdict(lambda: {k: 0 for k in _COLOR_BY_ACTION.keys()})
+    
+    if action_events:
+        # Define the windows in frames based on video FPS
+        approach_window = int(fps * 1.0)  # 1.0 seconds before and after
+        happen_window = int(fps * 0.4)    # 0.4 seconds before and after
+        
+        for event in action_events:
+            f = event['frame']
+            label = event['label']
+            
+            # 1. Mark approaching/leaving window
+            start_app = max(0, f - approach_window)
+            end_app = min(n - 1, f + approach_window)
+            for i in range(start_app, end_app + 1):
+                if event_states[i][label] < 1:  # Don't overwrite state 2
+                    event_states[i][label] = 1
+                    
+            # 2. Mark the exact happening moment with an expanded window
+            start_hap = max(0, f - happen_window)
+            end_hap = min(n - 1, f + happen_window)
+            for i in range(start_hap, end_hap + 1):
+                event_states[i][label] = 2
+
     for idx in tqdm(range(n), desc="Writing video"):
         ret, frame = cap.read()
         if not ret:
             break
         trail = ball_positions[max(0, idx - trail_len):idx + 1]
         court_kps = court_keypoints_per_frame[idx] if court_keypoints_per_frame is not None else None
+        
+        # Draw court, players, and ball
         vis = draw_all(frame, labeled_players[idx], ball_positions[idx],
                     ball_trail=trail, court_keypoints=court_kps)
+
+        # Draw the static event dashboard
+        vis = _draw_static_event_dashboard(vis, event_states[idx])
+
+        # Shift the frame counter text down slightly so it doesn't overlap the new 40px banner
         txt = f"frame {idx}/{n}  |  ball={'yes' if ball_positions[idx] else 'no'}"
-        cv2.putText(vis, txt, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(vis, txt, (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         out.write(vis)
 
     cap.release()
