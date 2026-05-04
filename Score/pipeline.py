@@ -21,6 +21,7 @@ FRAMES_DIR = 'data/tennis/frames'
 
 TRACKING_YOLO_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'yolov8m.pt')
 TRACKING_TRACKNET_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'tracknet', 'model_best.pt')
+TRACKING_COURT_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'court', 'model_tennis_court_det.pt')
 TRACKING_BALL_CHUNK = 4  # lower = less GPU memory
 
 TRACKING_W, TRACKING_H = 1280, 720
@@ -175,6 +176,7 @@ def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK,
             '--output', output_path,
             '--yolo-weights', os.path.abspath(TRACKING_YOLO_WEIGHTS),
             '--tracknet-weights', os.path.abspath(TRACKING_TRACKNET_WEIGHTS),
+            '--court-weights', os.path.abspath(TRACKING_COURT_WEIGHTS),
             '--ball-chunk', str(ball_chunk),
             '--original-video', video_path,
             '--original-width',  str(AS_W),
@@ -219,6 +221,8 @@ def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=192
     for frame in data['frames']:
         if frame.get('court_polygon'):
             frame['court_polygon'] = [[x*sx, y*sy] for x, y in frame['court_polygon']]
+        if frame.get("court_keypoints"):
+            frame["court_keypoints"] = [[x * sx, y * sy] for x, y in frame["court_keypoints"]]
 
     data['width'] = dst_w
     data['height'] = dst_h

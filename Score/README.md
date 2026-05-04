@@ -166,14 +166,40 @@ Score
 └── README.md
 ```
 
-I added the possibility to specify what the score is at the beginning of the video (default to 0-0 of course). The force-score flag forces the recomputation of the score even if the `score.json` file is alredy there.
-```bash
-python pipeline.py \
-      --video_name test_clip.mp4 \
-      --as_model_name tennis_rny008gsm_gru_rgb \
-      --initial-sets 0:0 \
-      --initial-games 0:0 \
-      --initial-points 2:2 \
-      --force-score
-```
-By doing this, the pipeline will start computing the score from 30-30 in the first game of the match.
+Here are the flags available in the `pipeline.py` script:
+* `--video_name`
+  Name of the input video file to process (e.g., `match.mp4`). Required.
+
+* `--as_model_name`
+  Selects which pre-trained Action Spotting model to use. Required.
+  Allowed values:
+
+  * `tennis_rny002gsm_gru_rgb`
+  * `tennis_rny008gsm_gru_rgb`
+
+* `--force-score`
+  Forces recomputation of the score, even if a `score.json` file already exists.
+
+* `--force-tracking`
+  Forces rerunning the tracking step, even if a `tracking.json` file already exists.
+
+* `--force-action-spotting`
+  Forces rerunning the action spotting step, even if an `action_spotting.json` file already exists.
+
+* `--no-players`
+  Skips player tracking during the tracking step.
+
+* `--no-ball`
+  Skips ball tracking during the tracking step.
+
+* `--no-court`
+  Skips court detection during the tracking step.
+
+* `--initial-sets`
+  Sets the starting set score in `FAR:NEAR` format (e.g., `1:0`).
+
+* `--initial-games`
+  Sets the starting game score in `FAR:NEAR` format (e.g., `3:2`).
+
+* `--initial-points`
+  Sets the starting point score in `FAR:NEAR` format (e.g., `2:1`).

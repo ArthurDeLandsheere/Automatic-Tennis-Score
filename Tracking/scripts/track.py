@@ -45,6 +45,9 @@ def main() -> None:
                         help="YOLO weights (auto-downloaded by ultralytics if missing)")
     parser.add_argument("--tracknet-weights", default="checkpoints/tracknet/model_best.pt",
                         help="TrackNet weights from yastrebksv/TrackNet")
+    parser.add_argument("--court-weights", default="checkpoints/court/model_tennis_court_det.pt",
+                        help="TrackNet weights from yastrebksv/TennisCourtDetector")
+
     parser.add_argument("--device", default=None,
                         help="cuda / cpu (auto-detected if omitted)")
     parser.add_argument("--ball-chunk", type=int, default=16,
@@ -103,12 +106,13 @@ def main() -> None:
 
     # ── Court ──────────────────────────────────────────────────────────────
     court_polygons_per_frame: list = []
+    court_keypoints_per_frame: list = []
     in_play_flags: list[bool] = []
 
 
     if not args.no_court:
         print("\n[2/3] Court detection + per-frame tracking")
-        court_tracker = CourtTracker()
+        court_tracker = CourtTracker(model_path=args.court_weights, device=device)
         cap = cv2.VideoCapture(str(args.video))
         n = info["n_frames"]
         for _ in tqdm(range(n), desc="Court tracking"):
@@ -117,9 +121,12 @@ def main() -> None:
                 in_play_flags.append(False)
                 court_polygons_per_frame.append(None)
                 continue
-            polygon, in_play = court_tracker.update(frame)
+            polygon, keypoints, in_play = court_tracker.update(frame)
             in_play_flags.append(in_play)
             court_polygons_per_frame.append(polygon.tolist() if polygon is not None else None)
+            court_keypoints_per_frame.append(
+                [[float(x), float(y)] for x, y in keypoints if x is not None and y is not None]
+            )
 
         cap.release()
         detected = sum(in_play_flags)
@@ -130,6 +137,7 @@ def main() -> None:
         print("\n[2/3] Skipping court detection (--no-court)")
         in_play_flags = [True] * info["n_frames"]
         court_polygons_per_frame = [None] * info["n_frames"]
+        court_keypoints_per_frame = [[] for _ in range(info["n_frames"])]
 
     # ── Ball ───────────────────────────────────────────────────────────────
     ball_positions_raw = [None] * info["n_frames"]
@@ -176,6 +184,7 @@ def main() -> None:
         ball_positions_smooth=ball_positions_smooth,
         ball_confidence=ball_confidence,
         court_polygons_per_frame=court_polygons_per_frame,
+        court_keypoints_per_frame=court_keypoints_per_frame,
         in_play_flags=in_play_flags,
     )
     print("\nDone.")

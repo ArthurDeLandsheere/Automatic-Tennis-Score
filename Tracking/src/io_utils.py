@@ -38,6 +38,7 @@ def save_tracks(
     ball_positions_smooth: list[tuple | None],
     ball_confidence: list[float],
     court_polygons_per_frame: list | None,
+    court_keypoints_per_frame: list | None = None,
     in_play_flags: list[bool] | None = None,
 ) -> None:
     """Dump the full tracking output to JSON.
@@ -69,7 +70,8 @@ def save_tracks(
             "players": labeled_players[i],
             "ball": ball_entry,
             "in_play":   in_play_flags[i] if in_play_flags is not None else True,
-            "court_polygon": court_polygons_per_frame[i] if court_polygons_per_frame is not None else None
+            "court_polygon": court_polygons_per_frame[i] if court_polygons_per_frame is not None else None,
+            "court_keypoints": court_keypoints_per_frame[i] if court_keypoints_per_frame is not None else []
         })
 
     payload = {
