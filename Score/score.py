@@ -119,11 +119,9 @@ class TennisScore:
         Returns False and register to second serve if it was the first serve.
         """
         if self.serve_number == 1:
-            # First serve missed, second chance
             self.serve_number = 2
             return False
         else:
-            # Double fault
             self.point_won(self.other(self.server_side), frame, double_fault=True)
             return True
 
@@ -173,7 +171,7 @@ class TennisScore:
             winner_points, loser_points = self.points[winner], self.points[loser]
 
             # Check if someone won the game
-            if winner_points >= 4 and (winner_points - loser_points) >= 2:
+            if winner_points >= 3 and (winner_points - loser_points) >= 2:
                 self.game_won(winner)
             # Check if becomes deuce (40-40)
             elif winner_points == 3 and loser_points == 3:
@@ -185,8 +183,15 @@ class TennisScore:
         """
         self.points[winner] += 1
         winner_points, loser_points = self.points[winner], self.points[self.other(winner)]
+        
+        # Rotate server every 2 points (after point 1, then every 2)
+        total = winner_points + loser_points
+        if total % 2 == 1:  # odd total = time to switch
+            self.server_side = self.other(self.server_side)
+        
         if winner_points >= TIEBREAK_PTS and (winner_points - loser_points) >= 2:
             self.game_won(winner)
+
 
     def game_won(self, winner: str):
         """
@@ -199,29 +204,19 @@ class TennisScore:
         loser = self.other(winner)
         winner_games, loser_games = self.games[winner], self.games[loser]
 
-        if winner_games == GAMES_TO_WIN and loser_games == GAMES_TO_WIN:
-            self.in_tiebreak = True
-        elif winner_games >= GAMES_TO_WIN and (winner_games - loser_games) >= 2:
-            self.in_tiebreak = False
-            self.set_won(winner)
-
-        if self.in_tiebreak and winner_games > loser_games:
-            # Case of 7-6 after a tiebreak
-            self.in_tiebreak = False
-            self.set_won(winner)
-        elif winner_games == GAMES_TO_WIN and loser_games == GAMES_TO_WIN:
-            # Case of 6-6
-            self.in_tiebreak = True
-        elif winner_games >= GAMES_TO_WIN and (winner_games - loser_games) >= 2:
-            # Case of 'normal' win like 6-3
-            self.set_won(winner)
-
-
         self.game_log.append({
             'winner_side': winner,
             'games_after': dict(self.games),
             'sets_after': dict(self.sets),
         })
+
+        if self.in_tiebreak and winner_games > loser_games:
+            self.in_tiebreak = False
+            self.set_won(winner)
+        elif winner_games == GAMES_TO_WIN and loser_games == GAMES_TO_WIN:
+            self.in_tiebreak = True
+        elif winner_games >= GAMES_TO_WIN and (winner_games - loser_games) >= 2:
+            self.set_won(winner)
 
 
     def set_won(self, winner: str):
@@ -302,25 +297,27 @@ class ScoreComputer:
                 self.swing(side, frame_index, frame)
 
     def serve(self, serve_side: str, frame_index: int, frame: dict):
-        # Determine total points using safe string keys
+        # Close the previous rally before starting a new point
+        if self.rally_ongoing and not self.is_serving:
+            self.finish_rally(frame_index)
+
         total_points = self.score.points["far"] + self.score.points["near"]
         is_even_score = (total_points % 2 == 0)
-
         if serve_side == "far":
             self.expected_serve_target_x = "right" if is_even_score else "left"
         else:
             self.expected_serve_target_x = "left" if is_even_score else "right"
 
-        # Action-spotting check: Was a ball actually detected? 
         if not frame.get("ball") or frame["ball"].get("conf", 0) < 0.2:
-            log.warning(f"Frame {frame_index}: Action-spotting detected serve, but tracking missed the ball.")
+            log.warning(f"Frame {frame_index}: serve detected but ball not tracked.")
+
+        if self.score.serve_number == 1:
+            self.score.new_point(serve_side, frame_index)
 
         self.is_serving = True
         self.serve_side = serve_side
         self.last_swing_side = serve_side
         self.rally_ongoing = True
-
-        self.score.new_point(serve_side, frame_index)
 
     def bounce(self, bounce_side: str, frame_index: int, frame: dict):
         if not self.rally_ongoing:
@@ -334,16 +331,18 @@ class ScoreComputer:
             
         if self.is_serving and bounce_side == self.serve_side:
             is_double_fault = self.score.serve_fault(frame_index)
-            self.rally_ongoing = False
             if is_double_fault:
                 self.reset_rally_state()
             else:
+                # First fault: go inert until second serve
+                self.rally_ongoing = False
+                self.is_serving = False
                 self.last_swing_side = None
             return
 
         is_out = False
 
-        if ball and court_kps:
+        if ball and court_kps and len(court_kps) == 14:
             ball_pt = (ball["x"], ball["y"])
             center_x = (court_kps[12][0] + court_kps[13][0]) / 2.0
 
@@ -386,10 +385,11 @@ class ScoreComputer:
         if is_out:
             if self.is_serving:
                 is_double_fault = self.score.serve_fault(frame_index)
-                self.rally_ongoing = False
                 if is_double_fault:
                     self.reset_rally_state()
                 else:
+                    self.rally_ongoing = False
+                    self.is_serving = False
                     self.last_swing_side = None
                 return
             else:

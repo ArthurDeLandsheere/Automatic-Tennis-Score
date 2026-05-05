@@ -205,7 +205,6 @@ The score-prediction stage reads both, joins on `frame_idx`, and applies the rul
 
 Honest list of what's not finished:
 
-1. **La détection des players est faite avec l'aire maximale actuellement** : Ca pose problème car c'est parfois un gars du public, il faudrait essayer d'utiliser la distance au terrain peut-être.
-2. **Court detection est maintenant faite sur chaque frame**: on peut ajouter un peu de smoothing et/ou d'interpolation si nécessaire mais c'est déjà pas mal. 
-4. **Peut-être essayer TrackNet V3.**
-5. **Peut-être Kalman filter pour le smoothing de la balle**
+1. **Court detection est maintenant faite sur chaque frame**: on peut ajouter un peu de smoothing et/ou d'interpolation si nécessaire mais c'est déjà pas mal. 
+2. **Peut-être essayer TrackNet V3.**
+3. **Peut-être Kalman filter pour le smoothing de la balle**

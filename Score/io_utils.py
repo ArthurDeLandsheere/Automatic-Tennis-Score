@@ -136,10 +136,12 @@ def merge_frames(
     for frame in tracking["frames"]:
         fidx = frame["frame_idx"]
         merged.append({
-            "frame_idx": fidx,
-            "players":   frame.get("players", []),
-            "ball":      frame.get("ball"),
-            "events":    events_by_frame.get(fidx, []),
+            "frame_idx":       fidx,
+            "players":         frame.get("players", []),
+            "ball":            frame.get("ball"),
+            # "court_keypoints": frame.get("court_keypoints", [])[4:], # [4:] because we don't care about the four first kps (outer corners)
+            "court_keypoints": frame.get("court_keypoints", []),
+            "events":          events_by_frame.get(fidx, []),
         })
     merged.sort(key=lambda d: d["frame_idx"])
     return merged

@@ -209,3 +209,9 @@ Here are the flags available in the `pipeline.py` script:
   Slip the visualization step.
 * `--force-viz`
   Force the visualization step even if outputs already exist.
+
+---
+**Improvements to make - Things missing**:
+- We could make use of the tracking output and the action-spotting output to validate some decisions. This can be done in a lot of scenarios and would allow more robust logic if one of the two tasks fail.
+- Overall, the score logic is really not perfect (not even good I'd say), so there are a lot of small adjustements to make I think. I think a good way to solve the score logic problems is to test it on small clips and compare the actual clip with the results to identify problems and then solve them one by one.
+- I think we should implement something that goes back to change the previous computed score. For example if the pipeline detects that it is 30-40 but the player change sides, then automatically the player that had 40 won the game.
