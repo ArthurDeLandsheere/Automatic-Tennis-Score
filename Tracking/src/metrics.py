@@ -7,9 +7,8 @@ to motmetrics.
 """
 
 from pathlib import Path
-
 import numpy as np
-
+from scipy.spatial import distance
 
 def ball_threshold_metrics(pred: list, gt: list, epsilon: float = 10) -> dict:
     """Standard TrackNet-style metric.
@@ -74,3 +73,43 @@ def load_tracknet_gt(csv_path: str, n_frames: int) -> list:
             continue
         gt[idx] = (x, y)
     return gt
+
+
+def is_point_in_image(x, y, input_width=1280, input_height=720):
+    """From TennisCourtDetector utils.py: Checks if a point is within frame bounds."""
+    if x is not None and y is not None:
+        return (x >= 0) and (x <= input_width) and (y >= 0) and (y <= input_height)
+    return False
+
+def court_keypoint_metrics(pred_kps, gt_kps, max_dist=7, width=1280, height=720):
+    """
+    Adapted from TennisCourtDetector test.py.
+    Calculates TP, FP, FN, TN based on a pixel distance threshold for 14 keypoints.
+    """
+    assert len(pred_kps) == 14 and len(gt_kps) == 14, "Must provide exactly 14 keypoints."
+    
+    tp = fp = fn = tn = 0
+    dists = []
+
+    for point_pred, point_gt in zip(pred_kps, gt_kps):
+        x_pred, y_pred = point_pred
+        x_gt, y_gt = point_gt
+
+        pred_in_img = is_point_in_image(x_pred, y_pred, width, height)
+        gt_in_img = is_point_in_image(x_gt, y_gt, width, height)
+
+        if pred_in_img and gt_in_img:
+            dst = distance.euclidean((x_pred, y_pred), (x_gt, y_gt))
+            dists.append(dst)
+            if dst < max_dist:
+                tp += 1
+            else:
+                fp += 1
+        elif pred_in_img and not gt_in_img:
+            fp += 1
+        elif not pred_in_img and gt_in_img:
+            fn += 1
+        elif not pred_in_img and not gt_in_img:
+            tn += 1
+
+    return tp, fp, fn, tn, dists
