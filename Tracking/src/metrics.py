@@ -16,6 +16,10 @@ def ball_threshold_metrics(pred: list, gt: list, epsilon: float = 10) -> dict:
 
     pred, gt: list of (x, y) or None, aligned frame-by-frame.
 
+    Frames where gt is None are treated as unannotated and skipped entirely
+    (neither FP nor TN). This matches sparse annotation schemes like
+    RacketVision where only clearly visible frames are labeled.
+
     Returns: dict with TP / FP / FN / TN / precision / recall / accuracy / F1
     and the mean pixel distance among matched detections.
     """
@@ -23,11 +27,9 @@ def ball_threshold_metrics(pred: list, gt: list, epsilon: float = 10) -> dict:
     TP = FP = FN = TN = 0
     dists: list[float] = []
     for p, g in zip(pred, gt):
-        if g is None and p is None:
-            TN += 1
-        elif g is None and p is not None:
-            FP += 1
-        elif g is not None and p is None:
+        if g is None:
+            continue  # unannotated frame — skip entirely
+        elif p is None:
             FN += 1
         else:
             d = ((p[0] - g[0]) ** 2 + (p[1] - g[1]) ** 2) ** 0.5
@@ -59,6 +61,7 @@ def load_tracknet_gt(csv_path: str, n_frames: int) -> list:
     import pandas as pd
 
     df = pd.read_csv(csv_path)
+    df.columns = [c.strip().replace(" ", "_") for c in df.columns]
     gt: list = [None] * n_frames
     for _, row in df.iterrows():
         stem = Path(str(row["file_name"])).stem
