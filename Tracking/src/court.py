@@ -24,11 +24,13 @@ from src.court_homography import get_trans_matrix
 # Unchanged helpers
 # ---------------------------------------------------------------------------
 
-def frame_has_court(frame: np.ndarray, threshold: int = 3000) -> bool:
+def frame_has_court(frame: np.ndarray, threshold: int = 1000) -> bool:
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     white_mask = cv2.inRange(hsv, (0, 0, 200), (180, 40, 255))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (80, 1))
     lines = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel)
+    if(int(np.sum(lines > 0)) <= threshold):
+        print(int(np.sum(lines > 0)))
     return int(np.sum(lines > 0)) > threshold
 
 
@@ -108,60 +110,81 @@ class CourtDetector:
         return matrix, points  # 3×3 or None
 
 
-# ---------------------------------------------------------------------------
-# CourtTracker — same public interface as before
-# ---------------------------------------------------------------------------
+def project_keypoints(matrix) -> list[tuple[float, float]] | None:
+    """Project the 14 canonical court keypoints into frame coords."""
+    if matrix is None:
+        return None
+    proj = cv2.perspectiveTransform(refer_kps, matrix).reshape(-1, 2)
+    return [(float(x), float(y)) for x, y in proj]
 
 class CourtTracker:
     """
-    Tracks court keypoints across video frames using per-frame DL inference.
+    Per-frame court tracker with homography-based projection and
+    shot-cut-aware persistence.
 
-    Each frame is detected independently — no homography propagation needed.
-    Frames where frame_has_court() is False are skipped and return empty keypoints.
-
-    Usage:
-        tracker = CourtTracker(model_path=..., device=...)
-        keypoints, in_play = tracker.update(frame)   # frame is BGR numpy array
-
-    Keypoint index mapping (14 points):
-        0: baseline_top[0]        (top-left baseline corner)
-        1: baseline_top[1]        (top-right baseline corner)
-        2: baseline_bottom[0]     (bottom-left baseline corner)
-        3: baseline_bottom[1]     (bottom-right baseline corner)
-        4: left_inner_line[0]     (top-left singles sideline)
-        5: left_inner_line[1]     (bottom-left singles sideline)
-        6: right_inner_line[0]    (top-right singles sideline)
-        7: right_inner_line[1]    (bottom-right singles sideline)
-        8: top_inner_line[0]      (top-left service box corner)
-        9: top_inner_line[1]      (top-right service box corner)
-       10: bottom_inner_line[0]   (bottom-left service box corner)
-       11: bottom_inner_line[1]   (bottom-right service box corner)
-       12: middle_line[0]         (net centre, top half)
-       13: middle_line[1]         (net centre, bottom half)
-
-    The "top" half of the court (indices 0, 1, 4, 6, 8, 9, 12) is the FAR
-    side; the "bottom" half (indices 2, 3, 5, 7, 10, 11, 13) is the NEAR side.
-    The net runs between kp[12] and kp[13].
+    Behaviour:
+      - Each frame is detected fresh.
+      - If the model's 14 raw points fit a court homography (residual
+        below threshold), we project the canonical keypoints through
+        it — guaranteeing geometric consistency.
+      - If the current frame fails, we fall back to the last good
+        homography (assumes the broadcast camera barely moves within a
+        shot — true for tennis).
+      - When a shot cut is detected, the cached homography is dropped
+        so we don't carry the previous camera's geometry into the new
+        one.
     """
 
-    def __init__(self, model_path: str, device: str = "cpu"):
+    def __init__(self, model_path: str, device: str = "cpu",
+                 shot_cut_threshold: float = 18.0):
         self._detector = CourtDetector(model_path=model_path, device=device)
-        self._last_keypoints: list = []
+        self._last_matrix = None
+        self._prev_gray_small = None
+        self._cut_thresh = shot_cut_threshold
+
+    def _is_shot_cut(self, frame: np.ndarray) -> bool:
+        """Cheap hard-cut detector: mean abs-diff on a 32×18 grayscale thumbnail."""
+        small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (32, 18))
+        if self._prev_gray_small is None:
+            self._prev_gray_small = small
+            return False
+        diff = float(np.abs(small.astype(np.int16) - self._prev_gray_small.astype(np.int16)).mean())
+        self._prev_gray_small = small
+        return diff > self._cut_thresh
 
     def update(self, frame: np.ndarray) -> tuple[list, bool]:
-        """
-        Process one frame.
-        Returns (keypoints, in_play).
-          - keypoints: list of 14 (x, y) pairs, or [] if not detected
-          - in_play:   True when court lines are visible in this frame
-        """
-        in_play = frame_has_court(frame)
+        if self._is_shot_cut(frame):
+            self._last_matrix = None
 
+        in_play = frame_has_court(frame)
         if not in_play:
+            print("testa")
             return [], False
 
-        _matrix, keypoints = self._detector.detect(frame)
-        if keypoints:
-            self._last_keypoints = keypoints
+        matrix, raw_points = self._detector.detect(frame)
+        if matrix is not None:
+            print("testb")
+            self._last_matrix = matrix
 
-        return self._last_keypoints, True
+        if self._last_matrix is None:
+            print("testc")
+
+
+        if self._last_matrix is not None:
+            print("testd")
+            from src.court_homography import project_keypoints
+            return project_keypoints(self._last_matrix), True
+
+        # Tier 2: no homography has fit yet this shot. Fall back to raw model
+        # output if it's reasonably populated (>= 8/14). Score side's _kps_have
+        # guard handles missing indices, and the visualizer's edge-drawing
+        # version handles Nones too.
+        valid = sum(1 for p in raw_points if p[0] is not None)
+        if valid >= 8:
+            print("teste")
+            return [(p[0], p[1]) if p[0] is not None else (None, None) for p in raw_points], True
+
+        print("testf")
+        return [], True
+
+

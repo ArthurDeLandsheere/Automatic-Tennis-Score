@@ -99,12 +99,18 @@ def main() -> None:
             ret, frame = cap.read()
             if not ret:
                 in_play_flags.append(False)
+                print("1")
                 court_keypoints_per_frame.append([])
                 continue
             keypoints, in_play = court_tracker.update(frame)
             in_play_flags.append(in_play)
+            print("2")
+            print(keypoints)
+            print([[float(x), float(y)] if (x is not None and y is not None) else None
+                for x, y in keypoints])
             court_keypoints_per_frame.append(
-                [[float(x), float(y)] for x, y in keypoints if x is not None and y is not None]
+                [[float(x), float(y)] if (x is not None and y is not None) else None
+                for x, y in keypoints]
             )
         cap.release()
         detected = sum(in_play_flags)
@@ -123,13 +129,14 @@ def main() -> None:
 
     if not args.no_players:
         print("\n[2/3] Player tracking (YOLOv8 + Bytetrack)")
-        raw_player_tracks = track_players(
+        raw_player_tracks, cut_frames = track_players(
             args.video,
             yolo_weights=args.yolo_weights,
             n_frames_total=info["n_frames"],
         )
         segments = select_main_player_ids_segmented(
             raw_player_tracks,
+            cut_frames,
             court_keypoints_per_frame=court_keypoints_per_frame,
             frame_w=info["width"],
             frame_h=info["height"],

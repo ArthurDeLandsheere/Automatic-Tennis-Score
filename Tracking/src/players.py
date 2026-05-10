@@ -12,6 +12,7 @@ from tqdm.auto import tqdm
 from ultralytics import YOLO
 import math
 from shapely.geometry import Point, Polygon
+import cv2
 
 
 def track_players(
@@ -28,6 +29,9 @@ def track_players(
     """
     yolo = YOLO(yolo_weights)
     tracks_per_frame: list[list[dict]] = []
+    cut_frames: list[int] = []
+    prev_thumb = None
+    cut_threshold = 20.0
 
     # stream=True iterates per-frame instead of materialising all results;
     # crucial for long videos.
@@ -42,11 +46,18 @@ def track_players(
         verbose=False,
     )
 
-    for result in tqdm(results_gen, total=n_frames_total, desc="YOLOv8+ByteTrack"):
-        frame_dets = []
+    for fidx, result in enumerate(tqdm(results_gen, total=n_frames_total, desc="YOLOv8+ByteTrack")):
+        if result.orig_img is not None:
+            thumb = cv2.resize(cv2.cvtColor(result.orig_img, cv2.COLOR_BGR2GRAY), (32, 18))
+            if prev_thumb is not None and float(np.abs(thumb.astype(np.int16) - prev_thumb.astype(np.int16)).mean()) > cut_threshold:
+                cut_frames.append(fidx)
+            prev_thumb = thumb
 
+        frame_dets = []
         # Temp debug
         n_raw = len(result.boxes) if result.boxes is not None else 0
+        if result.boxes is None:
+            print("no person found")
         n_tracked = len(result.boxes.id) if (result.boxes is not None and result.boxes.id is not None) else 0
         if n_raw != n_tracked:
             print(f"frame: {n_raw} detections, {n_tracked} with ID")
@@ -69,13 +80,13 @@ def track_players(
         print(f"[warn] YOLO generator stopped {missing} frames early — padding with empty frames")
         tracks_per_frame.extend([[] for _ in range(missing)])
 
-    return tracks_per_frame
+    return tracks_per_frame, cut_frames
 
 def build_court_polygon(
     court_keypoints_per_frame: list[list[list[float]]],
     frame_w: int,
     frame_h: int,
-    margin_tb: float = 0.15,
+    margin_tb: float = 0.05,
     margin_lr: float = 0.01,
 ) -> Optional[Polygon]:
     """Build a convex hull polygon from all court keypoints across frames,
@@ -122,6 +133,7 @@ def select_main_player_ids(
     top_k: int = 2,
     court_polygon: Optional[Polygon] = None,
     frame_h: Optional[int] = None,
+    min_frame_ratio = 0.5,
     verbose: bool = True,
 ) -> list[int]:
     """Pick the top_k IDs using presence score, with court-zone filtering
@@ -136,77 +148,187 @@ def select_main_player_ids(
          median center-y is in the top half, and the highest-scoring ID in the
          bottom half. This guarantees one player per side regardless of score.
     """
+    total_frames = len(tracks_per_frame)
+    min_frames = max(1, int(total_frames * min_frame_ratio))
+
     id_frame_count: Counter = Counter()
     id_areas: defaultdict = defaultdict(list)
     id_center_ys: defaultdict = defaultdict(list)
+    id_court_dists: defaultdict = defaultdict(list)
 
     for frame in tracks_per_frame:
         for d in frame:
             x1, y1, x2, y2 = d["bbox"]
             cx = (x1 + x2) / 2.0
             cy = (y1 + y2) / 2.0
-
-            # Court-zone filter: skip if center is outside the polygon
-            if court_polygon is not None and not court_polygon.contains(Point(cx, cy)):
-                continue
+            pid = d["id"]
 
             id_frame_count[d["id"]] += 1
             id_areas[d["id"]].append((x2 - x1) * (y2 - y1))
             id_center_ys[d["id"]].append(cy)
 
+            # Court-zone filter: skip if center is outside the polygon
+            if court_polygon is not None:
+                id_court_dists[pid].append(court_polygon.distance(Point(cx, cy)))
+
     if not id_frame_count:
         if verbose:
             print("  [warn] No detections survived court-zone filter — falling back to unfiltered.")
+        return []
         # Fallback: rebuild without filter
-        for frame in tracks_per_frame:
-            for d in frame:
-                x1, y1, x2, y2 = d["bbox"]
-                id_frame_count[d["id"]] += 1
-                id_areas[d["id"]].append((x2 - x1) * (y2 - y1))
-                id_center_ys[d["id"]].append((y1 + y2) / 2.0)
-
-    scored = []
+        # for frame in tracks_per_frame:
+        #     for d in frame:
+        #         x1, y1, x2, y2 = d["bbox"]
+        #         id_frame_count[d["id"]] += 1
+        #         id_areas[d["id"]].append((x2 - x1) * (y2 - y1))
+        #         id_center_ys[d["id"]].append((y1 + y2) / 2.0)
+    candidates = []
+    # scored = []
     for pid, cnt in id_frame_count.items():
         median_area = float(np.median(id_areas[pid]))
         median_cy = float(np.median(id_center_ys[pid]))
+
+        if court_polygon is not None:
+            avg_dist = float(np.mean(id_court_dists[pid]))
+            candidates.append((pid, cnt, median_area, median_cy, avg_dist))
+        else:
+            score = cnt * 1000 + math.log1p(median_area)
+            candidates.append((pid, cnt, median_area, median_cy, score))
+
         # Primary: frames seen. Secondary: log area as tiebreaker only.
-        score = cnt * 1000 + math.log1p(median_area)
-        scored.append((pid, cnt, median_area, median_cy, score))
-    scored.sort(key=lambda t: -t[4])
+        # score = cnt * 1000 + math.log1p(median_area)
+        # scored.append((pid, cnt, median_area, median_cy, score))
+    # scored.sort(key=lambda t: -t[4])
 
-    if verbose:
-        print("Top candidates (id, frames_seen, median_area, median_cy, score):")
-        for row in scored[:8]:
-            print(f"  id={row[0]:>3}  frames={row[1]:>4}  area={row[2]:>8.0f}  "
-                  f"cy={row[3]:>6.1f}  score={row[4]:>12.1f}")
+    main_ids: list[int] = []
 
-    # Vertical-zone constraint
-    half = (frame_h / 2.0) if frame_h is not None else None
+    if court_polygon is not None:
+        # --- presence gate ---
+        qualified = [c for c in candidates if c[1] >= min_frames]
+        if not qualified:
+            if verbose:
+                print(
+                    f"  [warn] No track meets min_frames={min_frames} "
+                    f"({min_frame_ratio*100:.0f}% of {total_frames} frames). "
+                    f"Falling back to all tracks."
+                )
+            qualified = candidates
 
-    if half is not None and len(scored) >= 2:
-        top_half_ids = [t for t in scored if t[3] < half]
-        bot_half_ids = [t for t in scored if t[3] >= half]
+        # --- rank by closeness to court, then frames, then area ---
+        # tuple: (avg_dist asc, -frames asc == frames desc, -area asc == area desc)
+        qualified.sort(key=lambda t: (t[4], -t[1], -t[2]))
 
-        top_pick = top_half_ids[0][0] if top_half_ids else scored[0][0]
-        bot_pick = next(
-            (t[0] for t in bot_half_ids if t[0] != top_pick),
-            scored[1][0],
-        )
-        main_ids = [top_pick, bot_pick]
+        if verbose:
+            print(
+                f"Top candidates (id, frames, median_area, median_cy, "
+                f"avg_dist_to_court) — min_frames={min_frames}:"
+            )
+            for row in qualified[:8]:
+                print(
+                    f"  id={row[0]:>3}  frames={row[1]:>4}  "
+                    f"area={row[2]:>8.0f}  cy={row[3]:>6.1f}  "
+                    f"avg_dist={row[4]:>8.2f}"
+                )
+
+        # --- vertical-zone constraint ---
+        half = frame_h / 2.0 if frame_h is not None else None
+
+        if half is not None and len(qualified) >= 2:
+            top_half = [c for c in qualified if c[3] < half]
+            bot_half = [c for c in qualified if c[3] >= half]
+
+            top_pick = top_half[0][0] if top_half else qualified[0][0]
+            bot_pick = next(
+                (c[0] for c in bot_half if c[0] != top_pick),
+                qualified[1][0] if len(qualified) > 1 else None,
+            )
+            main_ids = (
+                [top_pick, bot_pick]
+                if bot_pick is not None
+                else [c[0] for c in qualified[:top_k]]
+            )
+        else:
+            main_ids = [c[0] for c in qualified[:top_k]]
+
+    # ------------------------------------------------------------------
+    # 4. Fallback: original frame-count selection (no court polygon)
+    # ------------------------------------------------------------------
     else:
-        main_ids = [t[0] for t in scored[:top_k]]
+        candidates.sort(key=lambda t: -t[4])  # score descending
 
+        if verbose:
+            print("Top candidates (id, frames, median_area, median_cy, score):")
+            for row in candidates[:8]:
+                print(
+                    f"  id={row[0]:>3}  frames={row[1]:>4}  "
+                    f"area={row[2]:>8.0f}  cy={row[3]:>6.1f}  "
+                    f"score={row[4]:>12.1f}"
+                )
+
+        half = frame_h / 2.0 if frame_h is not None else None
+        if half is not None and len(candidates) >= 2:
+            top_half = [c for c in candidates if c[3] < half]
+            bot_half = [c for c in candidates if c[3] >= half]
+
+            top_pick = top_half[0][0] if top_half else candidates[0][0]
+            bot_pick = next(
+                (c[0] for c in bot_half if c[0] != top_pick),
+                candidates[1][0],
+            )
+            main_ids = [top_pick, bot_pick]
+        else:
+            main_ids = [c[0] for c in candidates[:top_k]]
+
+    # ------------------------------------------------------------------
+    # 5. Verbose summary
+    # ------------------------------------------------------------------
     if verbose:
+        half = frame_h / 2.0 if frame_h is not None else None
         for pid in main_ids:
-            row = next(t for t in scored if t[0] == pid)
-            half_label = "top-half" if (half and row[3] < half) else "bot-half"
-            print(f"  KEPT id={pid} ({half_label})")
+            row = next(c for c in candidates if c[0] == pid)
+            half_label = "N/A" if half is None else ("top-half" if row[3] < half else "bot-half")
+            if court_polygon is not None:
+                print(f"  KEPT id={pid} ({half_label}, avg_dist={row[4]:.2f})")
+            else:
+                print(f"  KEPT id={pid} ({half_label})")
         print(f"Main player IDs: {main_ids}")
 
     return main_ids
 
+    # if verbose:
+    #     print("Top candidates (id, frames_seen, median_area, median_cy, score):")
+    #     for row in candidates[:8]:
+    #         print(f"  id={row[0]:>3}  frames={row[1]:>4}  area={row[2]:>8.0f}  "
+    #               f"cy={row[3]:>6.1f}  score={row[4]:>12.1f}")
+
+    # Vertical-zone constraint
+    # half = (frame_h / 2.0) if frame_h is not None else None
+
+    # if half is not None and len(scored) >= 2:
+    #     top_half_ids = [t for t in scored if t[3] < half]
+    #     bot_half_ids = [t for t in scored if t[3] >= half]
+
+    #     top_pick = top_half_ids[0][0] if top_half_ids else scored[0][0]
+    #     bot_pick = next(
+    #         (t[0] for t in bot_half_ids if t[0] != top_pick),
+    #         scored[1][0],
+    #     )
+    #     main_ids = [top_pick, bot_pick]
+    # else:
+    #     main_ids = [t[0] for t in scored[:top_k]]
+
+    # if verbose:
+    #     for pid in main_ids:
+    #         row = next(t for t in scored if t[0] == pid)
+    #         half_label = "top-half" if (half and row[3] < half) else "bot-half"
+    #         print(f"  KEPT id={pid} ({half_label})")
+    #     print(f"Main player IDs: {main_ids}")
+
+    # return main_ids
+
 def select_main_player_ids_segmented(
     tracks_per_frame: list[list[dict]],
+    cut_frames,
     court_keypoints_per_frame: Optional[list[list[list[float]]]] = None,
     frame_w: Optional[int] = None,
     frame_h: Optional[int] = None,
@@ -218,7 +340,7 @@ def select_main_player_ids_segmented(
 
     Returns a list of (start, end, {id1, id2}) tuples — one per segment.
     """
-    segments = detect_cuts(tracks_per_frame, min_segment_frames=min_segment_frames)
+    segments = detect_cuts(len(tracks_per_frame), cut_frames, min_segment_frames=min_segment_frames)
 
     if verbose:
         print(f"  Detected {len(segments)} segment(s) after cut detection.")
@@ -294,35 +416,14 @@ def filter_and_label_players(
     return out
 
 def detect_cuts(
-    tracks_per_frame: list[list[dict]],
+    n_frames: int,
+    cut_frames: list[int],
     min_segment_frames: int = 15,
 ) -> list[tuple[int, int]]:
-    """Detect hard cuts by looking for frames where all tracked IDs are new.
-
-    A cut is declared when there is zero ID overlap between the previous
-    non-empty frame and the current non-empty frame. Returns a list of
-    (start, end) frame index pairs (end is exclusive) for each segment.
-    """
-    segments = []
-    seg_start = 0
-    prev_ids: set[int] = set()
-
-    for i, frame in enumerate(tracks_per_frame):
-        if not frame:
-            continue
-        curr_ids = {d["id"] for d in frame}
-        if prev_ids and curr_ids.isdisjoint(prev_ids):
-            # Zero overlap → hard cut
-            if i - seg_start >= min_segment_frames:
-                segments.append((seg_start, i))
-            seg_start = i
-        prev_ids = curr_ids
-
-    # Last segment
-    if len(tracks_per_frame) - seg_start >= min_segment_frames:
-        segments.append((seg_start, len(tracks_per_frame)))
-
-    return segments
+    """Build segments from a list of cut frame indices."""
+    boundaries = sorted({0, *cut_frames, n_frames})
+    return [(a, b) for a, b in zip(boundaries[:-1], boundaries[1:])
+            if b - a >= min_segment_frames]
 
 def player_count_stats(labeled_players: list[list[dict]]) -> dict:
     """Quick stats: how often did we see 2 / 1 / 0 players?"""
