@@ -220,7 +220,10 @@ def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=192
 
     for frame in data['frames']:
         if frame.get("court_keypoints"):
-            frame["court_keypoints"] = [[x * sx, y * sy] for x, y in frame["court_keypoints"]]
+            frame["court_keypoints"] = [
+                None if kp is None else [kp[0] * sx, kp[1] * sy]
+                for kp in frame["court_keypoints"]
+            ]
 
     data['width'] = dst_w
     data['height'] = dst_h

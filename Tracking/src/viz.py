@@ -60,7 +60,10 @@ def draw_court(frame: np.ndarray, court_keypoints: Optional[list]) -> np.ndarray
     if not court_keypoints:
         return frame
     vis = frame.copy()
-    for (x, y) in court_keypoints:
+    for kp in court_keypoints:
+        if kp is None:
+            continue
+        x, y = kp
         cv2.circle(vis, (int(x), int(y)), 6, (0, 0, 255), -1)
     return vis
 

@@ -84,6 +84,9 @@ def build_score_lookups(score):
     completed = sorted((p["end_frame"], p["score_after"]) for p in points)
     return completed, points
 
+def build_bounce_lookup(score):
+    return {b["frame_idx"]: b for b in score.get("bounces", [])}
+
 
 def get_score_at(completed, frame_idx):
     state = {"points": {"far": 0, "near": 0},
@@ -195,7 +198,7 @@ def draw_event_panel(frame, labels_at_frame, y_start=180):
         y_offset += th + pad * 2 + 8
 
 
-def draw_hud(frame, score_state, state, active_point, frame_idx, n_frames, last_completed=None):
+def draw_hud(frame, score_state, state, active_point, frame_idx, n_frames, bounce_lookup, last_completed=None):
     s_f, s_n = score_state["sets"]["far"],  score_state["sets"]["near"]
     g_f, g_n = score_state["games"]["far"], score_state["games"]["near"]
     p_f = POINT_LABELS.get(score_state["points"]["far"],  str(score_state["points"]["far"]))
@@ -235,6 +238,16 @@ def draw_hud(frame, score_state, state, active_point, frame_idx, n_frames, last_
                      f"({last_completed.get('reason','?')})")
     lines.append(f"Frame {frame_idx}/{n_frames}")
 
+    last_bounce = None
+    for f in sorted(bounce_lookup.keys()):
+        if f <= frame_idx:
+            last_bounce = bounce_lookup[f]
+        else:
+            break
+    if last_bounce:
+        verdict = "OUT" if last_bounce["is_out"] else "IN"
+        lines.append(f"Last bounce: {verdict} on {last_bounce['side']} ({last_bounce['context']}) @ {last_bounce['frame_idx']}")
+
     x0, y0, line_h, pad = 10, 10, 26, 6
     box_w = 320
     box_h = line_h * len(lines) + pad * 2
@@ -268,6 +281,7 @@ def main():
     top_level_court        = tracking.get("court_keypoints")
 
     state_lookup = build_state_lookup(score)
+    bounce_lookup = build_bounce_lookup(score)
 
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
@@ -309,7 +323,7 @@ def main():
         state = state_lookup.get(frame_idx, {})
         active_pt   = get_active_point(all_points, frame_idx)
         completed_pt = get_last_completed_point(all_points, frame_idx)
-        draw_hud(frame, score_state, state, active_pt, frame_idx, n_frames, completed_pt)
+        draw_hud(frame, score_state, state, active_pt, frame_idx, n_frames, bounce_lookup, completed_pt)
 
         # Action events panel (left, below HUD)
         draw_event_panel(frame, event_label_map.get(frame_idx, []))

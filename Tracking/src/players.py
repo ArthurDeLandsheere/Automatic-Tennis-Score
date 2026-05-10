@@ -98,7 +98,7 @@ def build_court_polygon(
     """
     all_pts = []
     for kps in court_keypoints_per_frame:
-        all_pts.extend(kps)
+        all_pts.extend(kp for kp in kps if kp is not None)
 
     if len(all_pts) < 4:
         return None

@@ -166,7 +166,7 @@ class CourtTracker:
             # print("testb")
             self._last_matrix = matrix
 
-        if self._last_matrix is None:
+        # if self._last_matrix is None:
             # print("testc")
 
 
