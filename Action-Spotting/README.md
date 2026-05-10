@@ -87,7 +87,43 @@ Action-Spotting
 ├── outputs                     # centralize all your .log files here
 │   ├── dl_videos.log
 │   └── process-videos.log
-└── # other files or folders
+├── visualize_predictions.py
+
+
+Tracking
+├── checkpoints                 # contains the pretrained models
+│   └── ...
+├── data
+│   └── tennis
+│       ├── videos              # mp4 videos for each match
+│       │   └── ...
+├── jobs                        # centralize all your .sbatch files here
+│   ├── ...
+├── outputs                     # centralize all your .log files here
+│   ├──...
+├── scripts
+│   ├── track.py
+│   └── visualize.py
+├── src
+│   ├── ...
+
+
+Score
+├── data
+│   └── tennis
+│       ├── videos              # mp4 videos for each match
+│       │   └── ...
+│       │   frames
+│       └── ...
+├── jobs                        # centralize all your .sbatch files here
+│   ├── ...
+├── outputs                     # centralize all your .log files here
+│   ├──...
+├── scripts
+│   └── visualize_full.py
+├── io_utils.py
+├── pipeline.py
+├── score.py
 ```
 
 ## 2. Test

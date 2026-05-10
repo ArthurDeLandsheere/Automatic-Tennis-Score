@@ -33,6 +33,7 @@ from src.players import (
     filter_and_label_players,
     player_count_stats,
     select_main_player_ids,
+    select_main_player_ids_segmented,
     track_players,
 )
 
@@ -45,6 +46,9 @@ def main() -> None:
                         help="YOLO weights (auto-downloaded by ultralytics if missing)")
     parser.add_argument("--tracknet-weights", default="checkpoints/tracknet/model_best.pt",
                         help="TrackNet weights from yastrebksv/TrackNet")
+    parser.add_argument("--court-weights", default="checkpoints/court/model_tennis_court_det.pt",
+                        help="TrackNet weights from yastrebksv/TennisCourtDetector")
+
     parser.add_argument("--device", default=None,
                         help="cuda / cpu (auto-detected if omitted)")
     parser.add_argument("--ball-chunk", type=int, default=16,
@@ -82,54 +86,67 @@ def main() -> None:
         print("  TrackNet was trained on 720p — accuracy will degrade.")
         print(f"  Resize first: ffmpeg -i in.mp4 -vf scale=1280:720 out.mp4")
 
-    # ── Players ────────────────────────────────────────────────────────────
-    labeled_players = None
-    main_ids = []
-
-    if not args.no_players:
-        print("\n[1/3] Player tracking (YOLOv8 + ByteTrack)")
-        raw_player_tracks = track_players(
-            args.video,
-            yolo_weights=args.yolo_weights,
-            n_frames_total=info["n_frames"],
-        )
-        main_ids = select_main_player_ids(raw_player_tracks, top_k=2)
-        labeled_players = filter_and_label_players(raw_player_tracks, main_ids)
-        stats = player_count_stats(labeled_players)
-        print(f"  2 players: {stats['both']}  /  1 player: {stats['one']}  /  0 players: {stats['none']}")
-    else:
-        print("\n[1/3] Skipping player tracking (--no-players)")
-        labeled_players = [[] for _ in range(info["n_frames"])]
-
     # ── Court ──────────────────────────────────────────────────────────────
-    court_polygons_per_frame: list = []
+    court_keypoints_per_frame: list = []
     in_play_flags: list[bool] = []
 
-
     if not args.no_court:
-        print("\n[2/3] Court detection + per-frame tracking")
-        court_tracker = CourtTracker()
+        print("\n[1/3] Court detection + per-frame tracking")
+        court_tracker = CourtTracker(model_path=args.court_weights, device=device)
         cap = cv2.VideoCapture(str(args.video))
         n = info["n_frames"]
         for _ in tqdm(range(n), desc="Court tracking"):
             ret, frame = cap.read()
             if not ret:
                 in_play_flags.append(False)
-                court_polygons_per_frame.append(None)
+                court_keypoints_per_frame.append([])
                 continue
-            polygon, in_play = court_tracker.update(frame)
+            keypoints, in_play = court_tracker.update(frame)
             in_play_flags.append(in_play)
-            court_polygons_per_frame.append(polygon.tolist() if polygon is not None else None)
-
+            # print("2")
+            # print(keypoints)
+            # print([[float(x), float(y)] if (x is not None and y is not None) else None
+            #     for x, y in keypoints])
+            court_keypoints_per_frame.append(
+                [[float(x), float(y)] if (x is not None and y is not None) else None
+                for x, y in keypoints]
+            )
         cap.release()
         detected = sum(in_play_flags)
         print(f"  Court visible in {detected}/{n} frames ({100*detected/n:.1f}%)")
-        if not any(p is not None for p in court_polygons_per_frame):
+        if not any(kps for kps in court_keypoints_per_frame):
             print("  WARNING: Court was never detected in any frame.")
+
     else:
-        print("\n[2/3] Skipping court detection (--no-court)")
+        print("\n[1/3] Skipping court detection (--no-court)")
         in_play_flags = [True] * info["n_frames"]
-        court_polygons_per_frame = [None] * info["n_frames"]
+        court_keypoints_per_frame = [[] for _ in range(info["n_frames"])]
+
+    # ── Players ────────────────────────────────────────────────────────────
+    labeled_players = None
+    main_ids = []
+
+    if not args.no_players:
+        print("\n[2/3] Player tracking (YOLOv8 + Bytetrack)")
+        raw_player_tracks, cut_frames = track_players(
+            args.video,
+            yolo_weights=args.yolo_weights,
+            n_frames_total=info["n_frames"],
+        )
+        segments = select_main_player_ids_segmented(
+            raw_player_tracks,
+            cut_frames,
+            court_keypoints_per_frame=court_keypoints_per_frame,
+            frame_w=info["width"],
+            frame_h=info["height"],
+        )
+        main_ids = list({id_ for _, _, ids in segments for id_ in ids})
+        labeled_players = filter_and_label_players(raw_player_tracks, segments)
+        stats = player_count_stats(labeled_players)
+        print(f"  2 players: {stats['both']}  /  1 player: {stats['one']}  /  0 players: {stats['none']}")
+    else:
+        print("\n[2/3] Skipping player tracking (--no-players)")
+        labeled_players = [[] for _ in range(info["n_frames"])]
 
     # ── Ball ───────────────────────────────────────────────────────────────
     ball_positions_raw = [None] * info["n_frames"]
@@ -175,7 +192,7 @@ def main() -> None:
         ball_positions_raw=ball_positions_raw,
         ball_positions_smooth=ball_positions_smooth,
         ball_confidence=ball_confidence,
-        court_polygons_per_frame=court_polygons_per_frame,
+        court_keypoints_per_frame=court_keypoints_per_frame,
         in_play_flags=in_play_flags,
     )
     print("\nDone.")

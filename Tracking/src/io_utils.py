@@ -37,16 +37,25 @@ def save_tracks(
     ball_positions_raw: list[tuple | None],
     ball_positions_smooth: list[tuple | None],
     ball_confidence: list[float],
-    court_polygons_per_frame: list | None,
+    court_keypoints_per_frame: list | None = None,
     in_play_flags: list[bool] | None = None,
 ) -> None:
     """Dump the full tracking output to JSON.
 
     The schema:
-      - Top-level: video metadata + main player IDs + court polygon (if any)
+      - Top-level: video metadata + main player IDs
       - frames[i] is one entry per video frame, aligned by index
       - ball.interpolated tells the score logic which detections were filled in
         by the smoother (so it can down-weight them if it wants to)
+
+    Court keypoints (14 per frame, when detected):
+        0/1  baseline_top left/right          (FAR baseline corners)
+        2/3  baseline_bottom left/right       (NEAR baseline corners)
+        4/5  left_inner_line top/bottom       (left singles sideline)
+        6/7  right_inner_line top/bottom      (right singles sideline)
+        8/9  top_inner_line left/right        (FAR service-box corners)
+       10/11 bottom_inner_line left/right     (NEAR service-box corners)
+       12/13 middle_line top/bottom           (net centre points)
     """
     n = video_info["n_frames"]
     assert len(labeled_players) == n, f"player tracks length mismatch: {len(labeled_players)} vs {n}"
@@ -69,7 +78,7 @@ def save_tracks(
             "players": labeled_players[i],
             "ball": ball_entry,
             "in_play":   in_play_flags[i] if in_play_flags is not None else True,
-            "court_polygon": court_polygons_per_frame[i] if court_polygons_per_frame is not None else None
+            "court_keypoints": court_keypoints_per_frame[i] if court_keypoints_per_frame is not None else []
         })
 
     payload = {

@@ -9,6 +9,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
+import json
 
 import numpy as np
 
@@ -45,15 +46,25 @@ def main() -> None:
         (f["ball"]["x"], f["ball"]["y"]) if f["ball"] is not None else None
         for f in tracks["frames"]
     ]
-    court_polygons = [
-        np.array(f["court_polygon"], dtype=np.int32)
-        if f.get("court_polygon") is not None else None
+    court_keypoints_per_frame = [
+        f.get("court_keypoints") or []
         for f in tracks["frames"]
     ]
 
+    as_path = Path(args.tracks).parent / 'action_spotting.json'
+    action_events = []
+    if as_path.exists():
+        with open(as_path) as f:
+            as_data = json.load(f)
+        # action_spotting.json is a list with one entry per video
+        action_events = as_data[0]['events'] if as_data else []
+        print(f"Loaded {len(action_events)} action spotting events.")
+    else:
+        print("No action_spotting.json found, skipping event overlay.")
+
     # 1) Sample frames grid
     show_sample_frames(
-        video_path, labeled_players, ball_positions=ball_positions,
+        video_path, labeled_players, ball_positions=ball_positions, court_keypoints_per_frame=court_keypoints_per_frame,
         n=args.n_samples, title=f"Tracking — {Path(video_path).name}",
         save_path=str(out_dir / "sample_frames.png"),
     )
@@ -70,7 +81,8 @@ def main() -> None:
             out_path=str(out_dir / "annotated.mp4"),
             labeled_players=labeled_players,
             ball_positions=ball_positions,
-            court_polygons=court_polygons,
+            court_keypoints_per_frame=court_keypoints_per_frame,
+            action_events=action_events,
         )
 
     print(f"\nDone. Outputs in {out_dir}/")

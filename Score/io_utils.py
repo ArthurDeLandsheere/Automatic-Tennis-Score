@@ -26,9 +26,9 @@ def load_tracking(path: str | Path) -> dict[str, Any]:
     """
     Load a tracking JSON and return it as-is.
 
-    Expected top-level keys (from Tracking/src/io_utils.py schema):
-        video, video_path, fps, width, height, n_frames,
-        main_player_ids, court_polygon, frames
+    # Expected top-level keys (from Tracking/src/io_utils.py schema):
+    #     video, video_path, fps, width, height, n_frames,
+    #     main_player_ids, frames
 
     Each frame in ``frames`` has:
         frame_idx, players (list of 2 dicts), ball (dict or null)
@@ -49,27 +49,24 @@ def load_predictions(path: str | Path, video_name: str | None = None) -> list[di
 
     The action-spotting repo writes predictions in the format::
 
-        [
-          {
-            "video": "match1",
-            "fps": 25.0,
-            "num_frames": 604,
-            "num_events": 20,
-            "events": [
-              {"frame": 106, "label": "far_court_serve",   "comment": "serve"},
-              {"frame": 115, "label": "near_court_bounce", "comment": ""},
-              ...
-            ]
-          },
-          ...
+    [
+        {
+        "video": match.mp4,
+        "fps": 25.0,
+        "events": [
+            {"frame": 312, "label": "far_court_bounce", "score": 0.525},
+            {"frame": 462, "label": "far_court_serve",  "score": 0.983},
+            ...
         ]
+        }
+    ]
 
     If the file contains multiple videos, ``video_name`` (stem, no extension)
     is used to select the right entry.  If only one entry is present it is
     used directly.
 
     Returns a list of event dicts sorted by frame, each with keys:
-        frame (int), label (str), comment (str)
+        frame (int), label (str), score (float)
     """
     path = Path(path)
     if not path.exists():
@@ -127,7 +124,7 @@ def merge_frames(
           "players":   list[dict],       # from tracking
           "ball":      dict | None,      # from tracking
           "events":    list[dict],       # action-spotting events on this frame
-                                         # each: {frame, label, comment}
+                                         # each: {frame, label, score}
         }
     """
     events_by_frame: dict[int, list[dict]] = {}
@@ -139,10 +136,12 @@ def merge_frames(
     for frame in tracking["frames"]:
         fidx = frame["frame_idx"]
         merged.append({
-            "frame_idx": fidx,
-            "players":   frame.get("players", []),
-            "ball":      frame.get("ball"),
-            "events":    events_by_frame.get(fidx, []),
+            "frame_idx":       fidx,
+            "players":         frame.get("players", []),
+            "ball":            frame.get("ball"),
+            # "court_keypoints": frame.get("court_keypoints", [])[4:], # [4:] because we don't care about the four first kps (outer corners)
+            "court_keypoints": frame.get("court_keypoints", []),
+            "events":          events_by_frame.get(fidx, []),
         })
     merged.sort(key=lambda d: d["frame_idx"])
     return merged

@@ -1,15 +1,9 @@
-J'ai demandé à un LLM de scinder le notebook en fichiers et de me générer ce readme après pour avoir la même structure que l'action-spotting.
-
-
-
-
-
 # Tracking
 
 This folder contains the **tracking component** of our automatic tennis scoring pipeline:
 
 1. **Player detection & tracking** — YOLOv8m (pretrained on COCO) + ByteTrack
-2. **Court-line detection** — homography-based detector (Hough lines + best-fit reference)
+2. **Court-line detection** — TennisCourtDetector ([yastrebksv/TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetector)): DL model with basic CV postprocessing steps.
 3. **Ball tracking** — TrackNet V1 ([yastrebksv/TrackNet](https://github.com/yastrebksv/TrackNet)) wrapped in a batched sliding-window inference loop (fixes the OOM in the reference repo)
 
 The output is a single JSON per video, designed to be consumed by the score-prediction stage alongside the action-spotting predictions.
@@ -53,7 +47,7 @@ ffmpeg -i in.mp4 -vf scale=1280:720 out.mp4
 
 ### 1.3 Checkpoints
 
-Two model checkpoints are needed:
+Three model checkpoints are needed:
 
 **YOLOv8m**: auto-downloaded by `ultralytics` on first use. To pre-cache it:
 ```bash
@@ -67,12 +61,16 @@ mkdir -p checkpoints/tracknet
 gdown <FILE_ID> -O checkpoints/tracknet/model_best.pt
 ```
 
-After both downloads, `checkpoints/` should look like:
+**TennisCourtDetecor weights**: download `model_tennis_court_det.pt` at https://drive.google.com/file/d/1f-Co64ehgq4uddcQm1aFBDtbnyZhQvgG/view and place it at `checkpoints/court/model_tennis_court_det.pt`.
+
+After this, `checkpoints/` should look like:
 ```
 checkpoints
-├── yolov8m.pt
-└── tracknet
-    └── model_best.pt
+├── court
+│   └── model_tennis_court_det.pt
+├── tracknet
+│   └── model_best.pt
+└── yolov8m.pt
 ```
 
 ### 1.4 Structure
@@ -81,9 +79,6 @@ After setup, the `Tracking` repo should look like this:
 ```
 Tracking
 ├── checkpoints                 
-│   ├── yolov8m.pt
-│   └── tracknet
-│       └── model_best.pt
 ├── data
 │   └── tennis
 │       ├── videos              
@@ -200,11 +195,5 @@ Both pipelines now produce per-frame JSON outputs aligned by frame index:
 
 The score-prediction stage reads both, joins on `frame_idx`, and applies the rules of tennis. The natural place for that code is a new sibling folder, e.g. `Score/`, that imports from neither but consumes both JSON formats.
 
-## Améliorations qu'on peut encore faire
-
-Honest list of what's not finished:
-
-1. **La détection des players est faite avec l'aire maximale actuellement** : Ca pose problème car c'est parfois un gars du public, il faudrait essayer d'utiliser la distance au terrain peut-être.
-2. **Court detection fonctionne une seulle fois** J'ai fait l'hypothèse d'une caméra fixe pour la court detection et je le fais qu'une fois pour que ça aille plus vite mais ducoup, si la caméra bouge, tout est cassé, peut-être le faire sur toutes les frames et des homographies alors.
-4. **Peut-être essayer TrackNet V3.**
-5. **Peut-être Kalman filter pour le smoothing de la balle**
+---
+`[Originally made by Claude and then modified by the authors.]` 

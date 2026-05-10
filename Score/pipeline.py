@@ -21,6 +21,7 @@ FRAMES_DIR = 'data/tennis/frames'
 
 TRACKING_YOLO_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'yolov8m.pt')
 TRACKING_TRACKNET_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'tracknet', 'model_best.pt')
+TRACKING_COURT_WEIGHTS = os.path.join(TRACKING_DIR, 'checkpoints', 'court', 'model_tennis_court_det.pt')
 TRACKING_BALL_CHUNK = 4  # lower = less GPU memory
 
 TRACKING_W, TRACKING_H = 1280, 720
@@ -50,10 +51,10 @@ def extract_frames(video_path, out_dir):
 
     if os.path.exists(frame_out):
         actual_frames = count_frames_on_disk(frame_out)
-        print(f'[Step 1/4] Frames already exist at {frame_out} ({actual_frames} frames), skipping extraction.')
+        print(f'[Step 1/5] Frames already exist at {frame_out} ({actual_frames} frames), skipping extraction.')
         return frame_out, actual_frames, fps
 
-    print(f'[Step 1/4] Extracting frames from {video_path} at {fps:.2f} fps...')
+    print(f'[Step 1/5] Extracting frames from {video_path} at {fps:.2f} fps...')
     subprocess.run([
         'python', os.path.join(AS_DIR, 'frames_as_jpg.py'),
         '--single_video', video_path,
@@ -63,7 +64,7 @@ def extract_frames(video_path, out_dir):
     ], check=True, cwd=AS_DIR, env={**os.environ, 'PYTHONUNBUFFERED': '1'})
 
     actual_frames = count_frames_on_disk(frame_out)
-    print(f'[Step 1/4] Done. Extracted {actual_frames} frames to {frame_out}.')
+    print(f'[Step 1/5] Done. Extracted {actual_frames} frames to {frame_out}.')
     return frame_out, actual_frames, fps
 
 
@@ -119,10 +120,10 @@ def run_action_spotting(video_name, frame_dir, model_name, num_frames, fps, out_
 
     expected_output = pred_file + '.json'
     if os.path.exists(expected_output) and not force:
-        print(f'[Step 2/4] Action spotting predictions already exist at {expected_output}, skipping.')
+        print(f'[Step 2/5] Action spotting predictions already exist at {expected_output}, skipping.')
         return
     if os.path.exists(expected_output) and force:
-        print(f'[Step 2/4] Action spotting already exists but --force-action-spotting set, recomputing...')
+        print(f'[Step 2/5] Action spotting already exists but --force-action-spotting set, recomputing...')
 
     cmd = [
         'python', 'test_e2e.py',
@@ -149,12 +150,12 @@ def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK,
     output_path = os.path.join(out_dir, 'tracking.json')
 
     if os.path.exists(output_path) and not force:
-        print(f'[Step 3/4] Tracking predictions already exist at {output_path}, skipping.')
+        print(f'[Step 3/5] Tracking predictions already exist at {output_path}, skipping.')
         return output_path
     if os.path.exists(output_path) and force:
-        print(f'[Step 3/4] Tracking already exists but --force-tracking set, recomputing...')
+        print(f'[Step 3/5] Tracking already exists but --force-tracking set, recomputing...')
 
-    print(f'[Step 3/4] Preparing tracking video (resizing to 720p if needed)...')
+    print(f'[Step 3/5] Preparing tracking video (resizing to 720p if needed)...')
     tracking_video_path, is_temp = get_tracking_video(video_path)
     try:
         # Build which components to skip
@@ -167,7 +168,7 @@ def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK,
             skip_flags.append('--no-court')
 
         skipped = ', '.join(f[2:] for f in skip_flags) if skip_flags else 'none'
-        print(f'[Step 3/4] Running tracking on {tracking_video_path} (skipping: {skipped})...')
+        print(f'[Step 3/5] Running tracking on {tracking_video_path} (skipping: {skipped})...')
 
         cmd = [
             'python', '-m', 'scripts.track',
@@ -175,6 +176,7 @@ def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK,
             '--output', output_path,
             '--yolo-weights', os.path.abspath(TRACKING_YOLO_WEIGHTS),
             '--tracknet-weights', os.path.abspath(TRACKING_TRACKNET_WEIGHTS),
+            '--court-weights', os.path.abspath(TRACKING_COURT_WEIGHTS),
             '--ball-chunk', str(ball_chunk),
             '--original-video', video_path,
             '--original-width',  str(AS_W),
@@ -183,17 +185,17 @@ def run_tracking(video_path, out_dir, ball_chunk=TRACKING_BALL_CHUNK,
         ]
         subprocess.run(cmd, check=True, cwd=TRACKING_DIR,
                        env={**os.environ, 'PYTHONUNBUFFERED': '1'})
-        print(f'[Step 3/4] Tracking done. Results in {output_path}.')
+        print(f'[Step 3/5] Tracking done. Results in {output_path}.')
 
         if (AS_W, AS_H) != (TRACKING_W, TRACKING_H):
-            print(f'[Step 3/4] Scaling tracking coordinates to {AS_W}x{AS_H}...')
+            print(f'[Step 3/5] Scaling tracking coordinates to {AS_W}x{AS_H}...')
             scale_tracking_to_1080p(output_path,
                 src_w=TRACKING_W, src_h=TRACKING_H,
                 dst_w=AS_W, dst_h=AS_H)
     finally:
         if is_temp:
             os.remove(tracking_video_path)
-            print(f'[Step 3/4] Removed temp tracking video: {tracking_video_path}')
+            print(f'[Step 3/5] Removed temp tracking video: {tracking_video_path}')
 
     return output_path
 
@@ -217,8 +219,11 @@ def scale_tracking_to_1080p(tracking_json_path, src_w=1280, src_h=720, dst_w=192
             ball['y'] *= sy
 
     for frame in data['frames']:
-        if frame.get('court_polygon'):
-            frame['court_polygon'] = [[x*sx, y*sy] for x, y in frame['court_polygon']]
+        if frame.get("court_keypoints"):
+            frame["court_keypoints"] = [
+                None if kp is None else [kp[0] * sx, kp[1] * sy]
+                for kp in frame["court_keypoints"]
+            ]
 
     data['width'] = dst_w
     data['height'] = dst_h
@@ -236,12 +241,12 @@ def run_score(pred_dir, video_stem, out_dir,
     output_path = os.path.join(out_dir, 'score.json')
 
     if os.path.exists(output_path) and not force:
-        print(f'[Step 4/4] Score already exists at {output_path}, skipping. Use --force-score to recompute.')
+        print(f'[Step 4/5] Score already exists at {output_path}, skipping. Use --force-score to recompute.')
         return output_path
     if os.path.exists(output_path) and force:
-        print(f'[Step 4/4] Score already exists but --force-score set, recomputing...')
+        print(f'[Step 4/5] Score already exists but --force-score set, recomputing...')
     else:
-        print(f'[Step 4/4] Computing score...')
+        print(f'[Step 4/5] Computing score...')
 
     cmd = [
         'python', '-m', 'scripts.score',
@@ -257,9 +262,30 @@ def run_score(pred_dir, video_stem, out_dir,
         cmd += ['--initial-points', initial_points]
     subprocess.run(cmd, check=True, cwd=os.path.abspath('.'),
                    env={**os.environ, 'PYTHONUNBUFFERED': '1'})
-    print(f'[Step 4/4] Score done. Results in {output_path}.')
+    print(f'[Step 4/5] Score done. Results in {output_path}.')
     return output_path
 
+def run_visualization(pred_dir, video_stem, force=False):
+    tracking_path = os.path.join(pred_dir, 'tracking.json')
+    out_dir = pred_dir
+    sample_frames_path = os.path.join(out_dir, 'sample_frames.png')
+
+    if os.path.exists(sample_frames_path) and not force:
+        print(f'[Step 5/5] Visualization already exists at {out_dir}, skipping. Use --force-viz to rerun.')
+        return
+    if os.path.exists(sample_frames_path) and force:
+        print(f'[Step 5/5] Visualization already exists but --force-viz set, recomputing...')
+    else:
+        print(f'[Step 5/5] Running visualization...')
+
+    cmd = [
+        'python', '-m', 'scripts.visualize',
+        '--tracks', tracking_path,
+        '--out-dir', out_dir,
+    ]
+    subprocess.run(cmd, check=True, cwd=TRACKING_DIR,
+                   env={**os.environ, 'PYTHONUNBUFFERED': '1'})
+    print(f'[Step 5/5] Visualization done. Results in {out_dir}.')
 
 def check_cuda():
     """Abort early if no CUDA GPU is available."""
@@ -303,6 +329,12 @@ def get_args():
     parser.add_argument('--initial-points', default=None,
                         help="Initial point score as FAR:NEAR, e.g. '2:1'")
 
+    # Visualization
+    parser.add_argument('--no-viz', action='store_true',
+                        help='Skip visualization step.')
+    parser.add_argument('--force-viz', action='store_true',
+                        help='Rerun visualization even if outputs already exist.')
+
     return parser.parse_args()
 
 
@@ -329,16 +361,16 @@ if __name__ == '__main__':
     frame_dir, num_frames, fps = extract_frames(video_path, frames_dir_abs)
 
     # Step 2: action spotting
-    print(f'\n[Step 2/4] Running action spotting (model: {args.as_model_name})...')
+    print(f'\n[Step 2/5] Running action spotting (model: {args.as_model_name})...')
     run_action_spotting(
         video_stem, frames_dir_abs, args.as_model_name, num_frames, fps,
         out_dir=pred_dir,
         force=args.force_action_spotting,
     )
-    print(f'[Step 2/4] Action spotting done. Results in {pred_dir}.')
+    print(f'[Step 2/5] Action spotting done. Results in {pred_dir}.')
 
     # Step 3: tracking
-    print(f'\n[Step 3/4] Running tracking...')
+    print(f'\n[Step 3/5] Running tracking...')
     run_tracking(
         video_path, pred_dir,
         force=args.force_tracking,
@@ -346,7 +378,7 @@ if __name__ == '__main__':
         no_ball=args.no_ball,
         no_court=args.no_court,
     )
-    print(f'[Step 3/4] Tracking done. Results in {pred_dir}.')
+    print(f'[Step 3/5] Tracking done. Results in {pred_dir}.')
 
     # Step 4: score computation
     run_score(
@@ -356,6 +388,15 @@ if __name__ == '__main__':
         initial_points=args.initial_points,
         force=args.force_score,
     )
+
+    # Step 5: visualization
+    if not args.no_viz:
+        run_visualization(
+            pred_dir,
+            video_stem,
+            force=args.force_viz,
+        )
+
 
     print(f'\n{"="*60}')
     print(f'Pipeline complete for: {args.video_name}')

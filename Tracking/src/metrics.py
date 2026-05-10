@@ -7,14 +7,17 @@ to motmetrics.
 """
 
 from pathlib import Path
-
 import numpy as np
-
+from scipy.spatial import distance
 
 def ball_threshold_metrics(pred: list, gt: list, epsilon: float = 10) -> dict:
     """Standard TrackNet-style metric.
 
     pred, gt: list of (x, y) or None, aligned frame-by-frame.
+
+    Frames where gt is None are treated as unannotated and skipped entirely
+    (neither FP nor TN). This matches sparse annotation schemes like
+    RacketVision where only clearly visible frames are labeled.
 
     Returns: dict with TP / FP / FN / TN / precision / recall / accuracy / F1
     and the mean pixel distance among matched detections.
@@ -23,11 +26,9 @@ def ball_threshold_metrics(pred: list, gt: list, epsilon: float = 10) -> dict:
     TP = FP = FN = TN = 0
     dists: list[float] = []
     for p, g in zip(pred, gt):
-        if g is None and p is None:
-            TN += 1
-        elif g is None and p is not None:
-            FP += 1
-        elif g is not None and p is None:
+        if g is None:
+            continue  # unannotated frame — skip entirely
+        elif p is None:
             FN += 1
         else:
             d = ((p[0] - g[0]) ** 2 + (p[1] - g[1]) ** 2) ** 0.5
@@ -59,6 +60,7 @@ def load_tracknet_gt(csv_path: str, n_frames: int) -> list:
     import pandas as pd
 
     df = pd.read_csv(csv_path)
+    df.columns = [c.strip().replace(" ", "_") for c in df.columns]
     gt: list = [None] * n_frames
     for _, row in df.iterrows():
         stem = Path(str(row["file_name"])).stem
@@ -74,3 +76,43 @@ def load_tracknet_gt(csv_path: str, n_frames: int) -> list:
             continue
         gt[idx] = (x, y)
     return gt
+
+
+def is_point_in_image(x, y, input_width=1280, input_height=720):
+    """From TennisCourtDetector utils.py: Checks if a point is within frame bounds."""
+    if x is not None and y is not None:
+        return (x >= 0) and (x <= input_width) and (y >= 0) and (y <= input_height)
+    return False
+
+def court_keypoint_metrics(pred_kps, gt_kps, max_dist=7, width=1280, height=720):
+    """
+    Adapted from TennisCourtDetector test.py.
+    Calculates TP, FP, FN, TN based on a pixel distance threshold for 14 keypoints.
+    """
+    assert len(pred_kps) == 14 and len(gt_kps) == 14, "Must provide exactly 14 keypoints."
+    
+    tp = fp = fn = tn = 0
+    dists = []
+
+    for point_pred, point_gt in zip(pred_kps, gt_kps):
+        x_pred, y_pred = point_pred
+        x_gt, y_gt = point_gt
+
+        pred_in_img = is_point_in_image(x_pred, y_pred, width, height)
+        gt_in_img = is_point_in_image(x_gt, y_gt, width, height)
+
+        if pred_in_img and gt_in_img:
+            dst = distance.euclidean((x_pred, y_pred), (x_gt, y_gt))
+            dists.append(dst)
+            if dst < max_dist:
+                tp += 1
+            else:
+                fp += 1
+        elif pred_in_img and not gt_in_img:
+            fp += 1
+        elif not pred_in_img and gt_in_img:
+            fn += 1
+        elif not pred_in_img and not gt_in_img:
+            tn += 1
+
+    return tp, fp, fn, tn, dists
