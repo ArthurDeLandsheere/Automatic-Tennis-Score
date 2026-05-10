@@ -58,8 +58,6 @@ SETS_TO_WIN = 2
 GAMES_TO_WIN = 6
 TIEBREAK_PTS = 7
 
-# Si on fait pour les doubles, il faudra rajouter des paramètres pour les supertiebreaks
-
 
 @dataclass
 class TennisScore:
