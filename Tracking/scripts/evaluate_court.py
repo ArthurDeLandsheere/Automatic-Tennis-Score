@@ -8,11 +8,11 @@ from scipy.spatial import distance
 import torch
 from src.court_reference import CourtReference
 from src.court_homography import get_trans_matrix
-# Ensure imports work from the Tracking folder
+
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Import your detector directly from the court module
 from src.court import CourtDetector
 
 def is_point_in_image(x, y, input_width=1280, input_height=720):
@@ -92,9 +92,7 @@ def main():
             
         image = cv2.imread(str(img_path))
         h, w = image.shape[:2]
-        
-        # Run inference using your custom detector
-        # detect() returns (matrix, points) where points is a list of 14 tuples
+
         _, pred_kps = detector.detect(image)
         
         # Calculate metrics for this frame
