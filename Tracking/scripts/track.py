@@ -99,15 +99,14 @@ def main() -> None:
             ret, frame = cap.read()
             if not ret:
                 in_play_flags.append(False)
-                print("1")
                 court_keypoints_per_frame.append([])
                 continue
             keypoints, in_play = court_tracker.update(frame)
             in_play_flags.append(in_play)
-            print("2")
-            print(keypoints)
-            print([[float(x), float(y)] if (x is not None and y is not None) else None
-                for x, y in keypoints])
+            # print("2")
+            # print(keypoints)
+            # print([[float(x), float(y)] if (x is not None and y is not None) else None
+            #     for x, y in keypoints])
             court_keypoints_per_frame.append(
                 [[float(x), float(y)] if (x is not None and y is not None) else None
                 for x, y in keypoints]
