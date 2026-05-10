@@ -716,6 +716,7 @@ class ScoreComputer:
 
         self.is_serving = False
 
+        # 
         if self.last_swing_side is not None and bounce_side == self.last_swing_side:
             winner = "far" if self.last_swing_side == "near" else "near"
             self.propose_point_end(
@@ -730,6 +731,24 @@ class ScoreComputer:
                 },
             )
             return
+
+        # NEW: bounce in court on the side opposite the last hitter.
+        # In a normal rally this is followed by a receiver swing, which
+        # will cancel this proposal via maybe_cancel_pending_point_end.
+        # If no follow-up event arrives before the next serve, the
+        # proposal commits — that's exactly a winner or an ace.
+        if self.last_swing_side is not None and bounce_side != self.last_swing_side:
+            self.propose_point_end(
+                frame_index,
+                winner_side=self.last_swing_side,
+                reason="winner_unreturned",
+                evidence={
+                    "event": "bounce",
+                    "bounce_side": bounce_side,
+                    "last_swing_side": self.last_swing_side,
+                    "ball": ball_pt,
+                },
+            )
 
     def swing(self, swing_side: str, frame_index: int, frame: dict):
         if not frame.get("ball") or frame["ball"].get("conf", 0) < 0.2:

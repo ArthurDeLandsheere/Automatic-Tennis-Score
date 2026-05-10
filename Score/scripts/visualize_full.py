@@ -239,9 +239,10 @@ def draw_hud(frame, score_state, state, active_point, frame_idx, n_frames, bounc
     lines.append(f"Frame {frame_idx}/{n_frames}")
 
     last_bounce = None
-    for f in sorted(bounce_lookup.keys()):
+    bo = bounce_lookup
+    for f in sorted(bo.keys()):
         if f <= frame_idx:
-            last_bounce = bounce_lookup[f]
+            last_bounce = bo[f]
         else:
             break
     if last_bounce:
