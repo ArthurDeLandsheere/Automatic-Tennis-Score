@@ -277,6 +277,7 @@ class ScoreComputer:
         self.pending_point_end = None
         self.pending_serve_fault = None
         self.observed_server_x_side = None
+        self.bounce_log = []
 
     @property
     def in_point(self) -> bool:
@@ -657,7 +658,7 @@ class ScoreComputer:
                 # expected_right = (self.expected_serve_target_x == "right")
                 
                 # Give a 10-pixel margin of error for tracking jitter
-                if dist < -10: # or (bounced_right != expected_right):
+                if dist < -3: # or (bounced_right != expected_right):
                     is_out = True
 
         elif ball_pt:
@@ -671,6 +672,15 @@ class ScoreComputer:
 
                 if dist < -10:
                     is_out = True
+
+        self.bounce_log.append({
+            "frame_idx": frame_index,
+            "side": bounce_side,           # "far" or "near"
+            "is_out": bool(is_out),
+            "dist": float(dist) if 'dist' in locals() else None,
+            "context": "serve" if self.is_serving else ("rally" if self.rally_ongoing else "idle"),
+            "ball_xy": [ball["x"], ball["y"]] if ball_pt else None,
+        })
 
         if is_out:
             if self.is_serving:
@@ -828,4 +838,5 @@ class ScoreComputer:
             "games":        games,
             "sets":         sets,
             "frame_states": self.frame_states,
+            "bounces":      self.bounce_log,
         }

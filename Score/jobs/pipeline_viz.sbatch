@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=16G
 #SBATCH --gres=gpu:1
-#SBATCH --time=01:00:00
+#SBATCH --time=06:00:00
 #SBATCH --partition=quadro
 
 set -euo pipefail
@@ -23,7 +23,7 @@ nvidia-smi
 which python
 
 # --- Config --------------------------------------------------------------
-VIDEO=test_clip6.mp4
+VIDEO=test_clip4.mp4
 MODEL=tennis_rny008gsm_gru_rgb
 VIDEO_STEM="${VIDEO%.*}"
 
