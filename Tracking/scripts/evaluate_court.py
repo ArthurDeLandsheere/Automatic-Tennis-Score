@@ -99,19 +99,7 @@ def main():
         
         # Calculate metrics for this frame
         tp, fp, fn, tn, dists = court_keypoint_metrics(pred_kps, gt_kps, width=w, height=h)
-        
-        total_tp_b += tp
-        total_fp_b += fp
-        total_fn_b += fn
-        total_tn_b += tn
-        all_dists_b.extend(dists)
-        
-        matrix_trans = get_trans_matrix(pred_kps)
-        if matrix_trans is not None:
-            pred_kps = cv2.perspectiveTransform(refer_kps, matrix_trans)
-            pred_kps = [np.squeeze(x) for x in pred_kps]
-        
-        tp, fp, fn, tn, dists = court_keypoint_metrics(pred_kps, gt_kps, width=w, height=h)
+    
         
         total_tp += tp
         total_fp += fp
@@ -121,31 +109,7 @@ def main():
 
         if (i + 1) % 10 == 0:
             print(f"Processed {i + 1}/{len(gt_data)} images...")
-    
-    eps = 1e-15
-    precision = total_tp_b / (total_tp_b + total_fp_b + eps)
-    accuracy = (total_tp_b + total_tn_b) / (total_tp_b + total_tn_b + total_fp_b + total_fn_b + eps)
-    mean_dist = np.mean(all_dists_b) if all_dists_b else 0.0
-    median_dist = np.median(all_dists_b) if all_dists_b else 0.0
 
-    print("\n" + "="*40)
-    print("=== Court Evaluation Results : Before the Homography ===")
-    print("="*40)
-    print(f"Images Evaluated:   {len(gt_data) - missing_images}")
-    if missing_images > 0:
-        print(f"Missing Images:     {missing_images} (Skipped)")
-    print(f"Total Keypoints:    {total_tp_b + total_fp_b + total_fn_b + total_tn_b}")
-    print(f"True Positives:     {total_tp_b}")
-    print(f"False Positives:    {total_fp_b}")
-    print(f"False Negatives:    {total_fn_b}")
-    print("-" * 40)
-    print(f"Precision:          {precision:.4f}")
-    print(f"Accuracy:           {accuracy:.4f}")
-    print(f"Mean Pixel Error:   {mean_dist:.2f} px")
-    print(f"Median Pixel Error: {median_dist:.2f} px")
-    print("="*40)
-
-    # Calculate final dataset-wide metrics
     eps = 1e-15
     precision = total_tp / (total_tp + total_fp + eps)
     accuracy = (total_tp + total_tn) / (total_tp + total_tn + total_fp + total_fn + eps)
@@ -153,7 +117,7 @@ def main():
     median_dist = np.median(all_dists) if all_dists else 0.0
 
     print("\n" + "="*40)
-    print("=== Court Evaluation Results : After the Homography===")
+    print("=== Court Evaluation Results ===")
     print("="*40)
     print(f"Images Evaluated:   {len(gt_data) - missing_images}")
     if missing_images > 0:
