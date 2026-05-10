@@ -158,20 +158,20 @@ class CourtTracker:
 
         in_play = frame_has_court(frame)
         if not in_play:
-            print("testa")
+            # print("testa")
             return [], False
 
         matrix, raw_points = self._detector.detect(frame)
         if matrix is not None:
-            print("testb")
+            # print("testb")
             self._last_matrix = matrix
 
         if self._last_matrix is None:
-            print("testc")
+            # print("testc")
 
 
         if self._last_matrix is not None:
-            print("testd")
+            # print("testd")
             from src.court_homography import project_keypoints
             return project_keypoints(self._last_matrix), True
 
@@ -181,10 +181,10 @@ class CourtTracker:
         # version handles Nones too.
         valid = sum(1 for p in raw_points if p[0] is not None)
         if valid >= 8:
-            print("teste")
+            # print("teste")
             return [(p[0], p[1]) if p[0] is not None else (None, None) for p in raw_points], True
 
-        print("testf")
+        # print("testf")
         return [], True
 
 
