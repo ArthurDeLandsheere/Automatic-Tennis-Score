@@ -14,7 +14,7 @@ The pipeline takes an untrimmed tennis match video as input and outputs a struct
 2. **Action Spotting** — temporally localizes serves, bounces, and swings throughout the match (6 event classes).
 3. **Score Computation** — consumes the outputs of the two modules above and applies official tennis rules to reconstruct the full match score.
 
-![Pipeline](image.png)
+![Pipeline](pipeline.png)
 
 
 ## Repository Structure
