@@ -1,9 +1,3 @@
-J'ai demandé à un LLM de scinder le notebook en fichiers et de me générer ce readme après pour avoir la même structure que l'action-spotting.
-
-
-
-
-
 # Tracking
 
 This folder contains the **tracking component** of our automatic tennis scoring pipeline:
@@ -201,10 +195,5 @@ Both pipelines now produce per-frame JSON outputs aligned by frame index:
 
 The score-prediction stage reads both, joins on `frame_idx`, and applies the rules of tennis. The natural place for that code is a new sibling folder, e.g. `Score/`, that imports from neither but consumes both JSON formats.
 
-## Améliorations qu'on peut encore faire
-
-Honest list of what's not finished:
-
-1. **Court detection est maintenant faite sur chaque frame**: on peut ajouter un peu de smoothing et/ou d'interpolation si nécessaire mais c'est déjà pas mal. 
-2. **Peut-être essayer TrackNet V3.**
-3. **Peut-être Kalman filter pour le smoothing de la balle**
+---
+`[Originally made by Claude and then modified by the authors.]` 

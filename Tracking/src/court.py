@@ -188,3 +188,4 @@ class CourtTracker:
         return [], True
 
 
+# Adapted by Claude (Anthropic) from the TennisCourtDetection repository.

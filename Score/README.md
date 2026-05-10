@@ -1,6 +1,3 @@
-J'ai demandé à un LLM de faire tout le "détail" du genre lire les json et les fusionner pour que je doive faire que la logique sans me faire chier pour les trucs nuls.
-
-
 # Score
 
 This folder is the third and final stage of the automatic tennis scoring pipeline.
@@ -211,19 +208,10 @@ Here are the flags available in the `pipeline.py` script:
   Force the visualization step even if outputs already exist.
 
 ---
-**Improvements to make - Things missing**:
-- We could make use of the tracking output and the action-spotting output to validate some decisions. This can be done in a lot of scenarios and would allow more robust logic if one of the two tasks fail.
-- Overall, the score logic is really not perfect (not even good I'd say), so there are a lot of small adjustements to make I think. I think a good way to solve the score logic problems is to test it on small clips and compare the actual clip with the results to identify problems and then solve them one by one.
-- I think we should implement something that goes back to change the previous computed score. For example if the pipeline detects that it is 30-40 but the player change sides, then automatically the player that had 40 won the game.
-
-
-
-
-
-
-
-
 
 # Known Problems
 
 When serving, it can be inside the court, but if a Let occured (the ball touching the net), it doesn't count. As it is really hard to track, we will just acknowledge the problem.
+
+---
+`[Originally made by Claude and then modified by the authors.]` 
