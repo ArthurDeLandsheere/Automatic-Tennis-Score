@@ -47,8 +47,6 @@ def load_yolo_labels(txt_path, img_w, img_h):
     if not os.path.exists(txt_path):
         return boxes
     
-    # Define which class IDs in your dataset actually represent players.
-    # Adjust this based on your dataset's data.yaml file!
     PLAYER_CLASSES = [0, 1] 
 
     with open(txt_path, 'r') as f:
@@ -74,7 +72,6 @@ def apply_spatial_filter(detections, frame_h, court_polygon=None):
     filtered = []
     half_y = frame_h / 2.0
 
-    # 1. Court Polygon Filter
     if court_polygon is not None:
         in_court = []
         for det in detections:
@@ -84,7 +81,6 @@ def apply_spatial_filter(detections, frame_h, court_polygon=None):
                 in_court.append(det)
         detections = in_court
 
-    # 2. Vertical split & Size filter
     detections.sort(key=lambda b: (b[2]-b[0])*(b[3]-b[1]), reverse=True)
 
     top_half = [b for b in detections if (b[1] + b[3])/2.0 < half_y]
@@ -126,36 +122,33 @@ def main():
         if img is None: continue
         img_h, img_w = img.shape[:2]
 
-        # 1. Get Ground Truth
+
         filename = os.path.basename(img_path)
         txt_path = os.path.join(lbl_dir, filename.replace(".jpg", ".txt"))
         gt_boxes = load_yolo_labels(txt_path, img_w, img_h)
 
-        # 2. Get Court Polygon (if filter is enabled)
         court_poly = None
         if args.apply_filter:
             # Detect 14 keypoints
             _, keypoints = court_detector.detect(img)
             
-            # Clean keypoints (remove Nones) and convert to float lists
             valid_kps = [[float(x), float(y)] for x, y in keypoints if x is not None and y is not None]
             
-            # Build polygon using your existing logic (needs a nested list for 'per frame' structure)
+
             if len(valid_kps) >= 4:
                 court_poly = build_court_polygon([valid_kps], img_w, img_h)
 
-        # 3. Get YOLO Predictions
+
         results = yolo.predict(img, classes=[0], conf=0.3, verbose=False)[0]
         pred_boxes = []
         if results.boxes is not None:
             for box in results.boxes.xyxy.cpu().numpy():
                 pred_boxes.append(box.tolist())
 
-        # 4. Apply Custom Spatial Filtering
         if args.apply_filter:
             pred_boxes = apply_spatial_filter(pred_boxes, img_h, court_polygon=court_poly)
 
-        # 5. Match Predictions to Ground Truth
+
         matched_gt = set()
         matched_pred = set()
 
