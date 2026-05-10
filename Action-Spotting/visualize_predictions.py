@@ -188,3 +188,4 @@ ui = widgets.VBox([img_widget, slider, controls, info_label])
 show_frame(0)
 display(ui)
 
+# [MADE BY CLAUDE (Anthropic)]
